@@ -1,0 +1,41 @@
+mod:
+  id: fih
+  name: Fih
+  group: net.syrupstudios
+  version: 1.0.0
+  description: Fih mod for Minecraft.
+  authors:
+    - Syrup Studios
+  license: RSL-1.0
+  license_file: LICENSE.md
+  homepage: https://github.com/Syrup-Studios/fih
+  issues: https://github.com/Syrup-Studios/fih/issues
+  sources: https://github.com/Syrup-Studios/fih
+
+publish:
+  modrinth: ""
+  curseforge: ""
+publish.release_type: stable
+loomx.loom_version: "1.17.21"
+
+targets:
+  - minecraft: 1.21.1
+    loaders: [fabric, neoforge]
+
+"1.21.1":
+  java:
+    version: 21
+  mod.mc_releases: ["1.21.1"]
+  mod:
+    fabric_mc_range: 1.21.1
+    neoforge_mc_range: '[1.21.1]'
+  fabric:
+    publish.modrinth_requires: [fabric-api]
+    publish.curseforge_requires: [fabric-api]
+    deps:
+      fabric_loader: 0.20.1
+      fabric_api: 0.116.17+1.21.1
+    environment: "*"
+  neoforge:
+    deps:
+      neoforge: 21.1.265

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "${modId}",
+  "version": "${version}",
+  "name": "${modName}",
+  "description": "${modDescription}",
+  "authors": ["@authors@"],
+  "contact": {
+    "homepage": "${homepage}",
+    "issues": "${issues}",
+    "sources": "${sources}"
+  },
+  "license": "${license}",
+  "environment": "${environment}",
+  "entrypoints": {
+    "main": ["${modPackage}.loaders.fabric.FabricEntrypoint"]
+  },
+  "depends": {"@dependencies@": ""}
+}

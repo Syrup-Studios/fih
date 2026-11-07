@@ -1,0 +1,8 @@
+package ${modPackage};
+
+public final class ModIdentity {
+    public static final String MOD_ID = ${modIdJava};
+    public static final String MOD_NAME = ${modNameJava};
+
+    private ModIdentity() {}
+}
