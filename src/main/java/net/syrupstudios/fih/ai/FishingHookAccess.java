@@ -8,4 +8,6 @@ public interface FishingHookAccess {
     boolean fih$reserve(AbstractFish fish);
     void fih$release(AbstractFish fish);
     void fih$completeApproach(AbstractFish fish);
+    void fih$reelIn();
+    float fih$visualTension(float partialTick);
 }
