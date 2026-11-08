@@ -3,6 +3,7 @@ package net.syrupstudios.fih.mixin;
 import java.util.stream.Stream;
 
 import net.minecraft.world.entity.animal.AbstractSchoolingFish;
+import net.syrupstudios.fih.ai.FishApproachHookGoal;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,5 +30,13 @@ public abstract class SchoolingFishMixin {
     @Inject(method = "stopFollowing", at = @At("HEAD"), cancellable = true)
     private void fih$skipRepeatedStopFollowing(CallbackInfo ci) {
         if (leader == null) ci.cancel();
+    }
+
+    @Inject(method = "pathToLeader", at = @At("HEAD"), cancellable = true)
+    private void fih$keepHookApproachPath(CallbackInfo ci) {
+        var goals = ((MobGoalSelectorAccess) this).fih$goalSelector().getAvailableGoals();
+        if (goals.stream().anyMatch(goal -> goal.isRunning() && goal.getGoal() instanceof FishApproachHookGoal)) {
+            ci.cancel();
+        }
     }
 }
