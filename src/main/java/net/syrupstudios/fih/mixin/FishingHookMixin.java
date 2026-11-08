@@ -1,12 +1,15 @@
 package net.syrupstudios.fih.mixin;
 
-import java.util.UUID;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
@@ -16,15 +19,14 @@ import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
-import net.syrupstudios.fih.ai.FishingHookAccess;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
+import net.syrupstudios.fih.FihGameRules;
+import net.syrupstudios.fih.ai.FishingHookAccess;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -52,19 +54,40 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             return;
         }
         hook.setDeltaMovement(Vec3.ZERO);
-        hook.setPos(fish.getX(), fish.getY(0.8), fish.getZ());
+        double yaw = Math.toRadians(fish.yBodyRot);
+        double forward = (fish.getBbWidth() + hook.getBbWidth()) * 0.5;
+        hook.setPos(fish.getX() - Math.sin(yaw) * forward, fish.getY(0.5),
+                fish.getZ() + Math.cos(yaw) * forward);
     }
 
     @Override
     @Unique
     public boolean fih$targets(AbstractFish fish) {
         FishingHook hook = (FishingHook) (Object) this;
-        boolean ignored = fih$ignoredFish.computeIfAbsent(fish.getUUID(), id -> hook.getRandom().nextFloat() < 0.15F);
-        BlockPos hookPos = hook.blockPosition();
-        BlockPos waterPos = hook.level().getFluidState(hookPos).is(FluidTags.WATER) ? hookPos : hookPos.below();
-        return hookedIn == null && hook.isInWater() && hook.level().getFluidState(waterPos).is(FluidTags.WATER)
+        boolean ignored = fih$ignoredFish.computeIfAbsent(fish.getUUID(), id -> hook.getRandom().nextInt(10000)
+                < FihGameRules.chance(hook.level().getGameRules(), FihGameRules.IGNORE_CHANCE));
+        return hookedIn == null && fih$hasWaterAtOrBelow(hook)
                 && fish.isAlive() && fish.isInWater() && fish.distanceToSqr(hook) <= 144
                 && !ignored && (fih$reservedFish == null || fih$reservedFish.equals(fish.getUUID()));
+    }
+
+    @Override
+    @Unique
+    public String fih$diagnostics(AbstractFish fish) {
+        FishingHook hook = (FishingHook) (Object) this;
+        return "hook=" + hook.getId() + " pos=" + hook.blockPosition().toShortString()
+                + " distance=" + String.format(Locale.ROOT, "%.2f", fish.distanceTo(hook))
+                + " hookInWater=" + hook.isInWater() + " waterAtOrBelow=" + fih$hasWaterAtOrBelow(hook)
+                + " fishInWater=" + fish.isInWater() + " hookedEntity="
+                + (hookedIn == null ? "none" : hookedIn.getId()) + " reservedFish=" + fih$reservedFish
+                + " ignored=" + fih$ignoredFish.get(fish.getUUID());
+    }
+
+    @Unique
+    private static boolean fih$hasWaterAtOrBelow(FishingHook hook) {
+        BlockPos pos = hook.blockPosition();
+        return hook.level().getFluidState(pos).is(FluidTags.WATER)
+                || hook.level().getFluidState(pos.below()).is(FluidTags.WATER);
     }
 
     @Override
@@ -100,7 +123,8 @@ public abstract class FishingHookMixin implements FishingHookAccess {
 
     @Inject(method = "retrieve", at = @At("RETURN"))
     private void fih$keepReeledFish(ItemStack rod, CallbackInfoReturnable<Integer> cir) {
-        if (!(hookedIn instanceof AbstractFish fish) || fish.isRemoved() || !fish.isAlive() || !(fish.level() instanceof ServerLevel level)) return;
+        if (!(hookedIn instanceof AbstractFish fish) || fish.isRemoved() || !fish.isAlive()
+                || !(fish.level() instanceof ServerLevel level)) return;
         Player player = ((FishingHook) (Object) this).getPlayerOwner();
         if (player == null) return;
 
