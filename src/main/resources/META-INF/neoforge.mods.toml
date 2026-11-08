@@ -3,6 +3,9 @@ loaderVersion="[4,)"
 license="${license}"
 issueTrackerURL="${issues}"
 
+[[mixins]]
+config="fih.mixins.json"
+
 [[mods]]
 modId="${modIdKey}"
 version="${version}"

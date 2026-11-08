@@ -5,7 +5,7 @@ plugins {
     id("me.modmuss50.mod-publish-plugin") version "2.2.0" apply false
 }
 
-stonecutter active null
+stonecutter active "1.21.1-neoforge"
 
 stonecutter.parameters {
     val loader = current.project.substringAfterLast('-')

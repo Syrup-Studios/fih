@@ -15,5 +15,6 @@
   "entrypoints": {
     "main": ["${modPackage}.loaders.fabric.FabricEntrypoint"]
   },
+  "mixins": ["fih.mixins.json"],
   "depends": {"@dependencies@": ""}
 }

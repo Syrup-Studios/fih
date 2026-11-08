@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "${modPackage}.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["FishingHookMixin", "AbstractFishMixin", "MobGoalSelectorAccess", "SchoolingFishMixin", "RandomStrollGoalMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

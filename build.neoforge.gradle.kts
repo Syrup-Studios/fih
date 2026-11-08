@@ -109,6 +109,7 @@ tasks.named<ProcessResources>("processResources") {
     inputs.properties(metadata)
     exclude("fabric.mod.json")
     filesMatching(metadataPath, NeoforgeMetadataAction(metadata))
+    filesMatching("fih.mixins.json", NeoforgeMetadataAction(mapOf("modPackage" to escape(modPackage))))
 }
 
 version = modVersion

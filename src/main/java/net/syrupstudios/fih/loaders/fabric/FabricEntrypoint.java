@@ -1,7 +1,7 @@
 package net.syrupstudios.fih.loaders.fabric;
 
 //? if fabric {
-import net.fabricmc.api.ModInitializer;
+/*import net.fabricmc.api.ModInitializer;
 import net.syrupstudios.fih.Fih;
 
 public final class FabricEntrypoint implements ModInitializer {
@@ -10,4 +10,4 @@ public final class FabricEntrypoint implements ModInitializer {
         Fih.initialize("Fabric");
     }
 }
-//?}
+*///?}
