@@ -13,9 +13,9 @@ mod:
   sources: https://github.com/Syrup-Studios/fih
 
 publish:
-  modrinth: ""
-  curseforge: ""
-publish.release_type: stable
+  modrinth: "QM06cOR6"
+  curseforge: "1790757"
+publish.release_type: beta
 loomx.loom_version: "1.17.21"
 
 targets:
