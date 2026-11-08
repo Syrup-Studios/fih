@@ -24,6 +24,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import net.syrupstudios.fih.FihGameRules;
 import net.syrupstudios.fih.ai.FishingHookAccess;
+import net.syrupstudios.fih.client.FishPitchAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -56,8 +57,12 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         hook.setDeltaMovement(Vec3.ZERO);
         double yaw = Math.toRadians(fish.yBodyRot);
         double forward = (fish.getBbWidth() + hook.getBbWidth()) * 0.5;
-        hook.setPos(fish.getX() - Math.sin(yaw) * forward, fish.getY(0.5),
-                fish.getZ() + Math.cos(yaw) * forward);
+        double pitch = hook.level().isClientSide && fish instanceof FishPitchAccess swimPitch
+                ? Math.toRadians(swimPitch.fih$swimPitch(1.0F)) : 0.0;
+        double horizontalForward = forward * Math.cos(pitch);
+        hook.setPos(fish.getX() - Math.sin(yaw) * horizontalForward,
+                fish.getY(0.5) + Math.sin(pitch) * forward,
+                fish.getZ() + Math.cos(yaw) * horizontalForward);
     }
 
     @Override

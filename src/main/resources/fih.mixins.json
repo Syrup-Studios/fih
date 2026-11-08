@@ -3,5 +3,6 @@
   "package": "${modPackage}.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": ["FishingHookMixin", "AbstractFishMixin", "MobGoalSelectorAccess", "SchoolingFishMixin", "RandomStrollGoalMixin", "GameRulesAccess", "IntegerGameRuleAccess"],
+  "client": ["client.FishSwimPitchMixin", "client.FishRendererPitchMixin"],
   "injectors": { "defaultRequire": 1 }
 }
