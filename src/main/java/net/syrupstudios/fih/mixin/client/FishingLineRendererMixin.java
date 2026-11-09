@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
@@ -24,16 +25,53 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.syrupstudios.fih.ai.FishingHookAccess;
 import net.syrupstudios.fih.client.FishingRodMotion;
+import net.syrupstudios.fih.client.BobberModelRenderer;
 
 @Mixin(FishingHookRenderer.class)
 public abstract class FishingLineRendererMixin {
+    private static final float fih$BOBBER_TOP = 2.5F / 16.0F;
+    private static final float fih$BOBBER_BOTTOM = -1.5F / 16.0F;
+    private static final float fih$HOOK_TOP = 2.0F / 16.0F;
+
+    @Redirect(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/FishingHookRenderer;vertex(Lcom/mojang/blaze3d/vertex/VertexConsumer;Lcom/mojang/blaze3d/vertex/PoseStack$Pose;IFIII)V"))
+    private void fih$hideVanillaSprite(VertexConsumer consumer, PoseStack.Pose pose, int light,
+            float x, int y, int u, int v) {}
+
+    @Inject(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("TAIL"))
+    private void fih$renderSubmergedHook(FishingHook hook, float yaw, float partialTick, PoseStack pose,
+            MultiBufferSource buffers, int light, CallbackInfo ci) {
+        BobberModelRenderer.renderBobber(pose, buffers, light);
+        Vec3 offset = ((FishingHookAccess) hook).fih$renderHookPosition(partialTick)
+                .subtract(hook.getPosition(partialTick));
+        if (offset.lengthSqr() < 0.0001) return;
+
+        VertexConsumer line = buffers.getBuffer(RenderType.lines());
+        PoseStack.Pose linePose = pose.last();
+        Vec3 direction = offset.add(0.0, fih$HOOK_TOP - fih$BOBBER_BOTTOM, 0.0).normalize();
+        line.addVertex(linePose, 0.0F, fih$BOBBER_BOTTOM, 0.0F).setColor(0xFFC0C0C0)
+                .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
+        line.addVertex(linePose, (float) offset.x, (float) offset.y + fih$HOOK_TOP, (float) offset.z).setColor(0xFFC0C0C0)
+                .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
+
+        pose.pushPose();
+        pose.translate(offset.x, offset.y, offset.z);
+        BobberModelRenderer.renderHook(pose, buffers, light, Minecraft.getInstance().gameRenderer.getMainCamera().getYRot());
+        pose.popPose();
+    }
+
     @Redirect(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/FishingHookRenderer;stringVertex(FFFLcom/mojang/blaze3d/vertex/VertexConsumer;Lcom/mojang/blaze3d/vertex/PoseStack$Pose;FF)V"))
     private void fih$renderLine(float x, float y, float z, VertexConsumer consumer, PoseStack.Pose pose,
             float fraction, float nextFraction, FishingHook hook, float yaw, float partialTick,
             PoseStack stack, MultiBufferSource buffers, int light) {
+        Player owner = hook.getPlayerOwner();
+        if (owner != null && !owner.getMainHandItem().is(Items.FISHING_ROD)
+                && !owner.getOffhandItem().is(Items.FISHING_ROD)) return;
+        y += 0.25F - fih$BOBBER_TOP;
         float tension = Math.min(1.0F, ((FishingHookAccess) hook).fih$visualTension(partialTick) * 2.0F);
         float curve = Mth.lerp(tension, (fraction * fraction + fraction) * 0.5F, fraction);
         float nextCurve = Mth.lerp(tension, (nextFraction * nextFraction + nextFraction) * 0.5F, nextFraction);
@@ -46,7 +84,7 @@ public abstract class FishingLineRendererMixin {
             normalY /= length;
             normalZ /= length;
         }
-        consumer.addVertex(pose, x * fraction, y * curve + 0.25F, z * fraction)
+        consumer.addVertex(pose, x * fraction, y * curve + fih$BOBBER_TOP, z * fraction)
                 .setColor(0xFFC0C0C0).setNormal(pose, normalX, normalY, normalZ);
     }
 

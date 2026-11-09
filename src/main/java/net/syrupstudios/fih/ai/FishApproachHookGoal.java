@@ -4,14 +4,17 @@ import java.util.Comparator;
 import java.util.EnumSet;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.HitResult;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.FihGameRules;
 
@@ -46,10 +49,11 @@ public final class FishApproachHookGoal extends Goal {
     @Override
     public boolean canUse() {
         if (!fish.isAlive() || fish.level().isClientSide) return false;
-        AABB searchArea = new AABB(fish.blockPosition()).inflate(HOOK_SEARCH_RADIUS);
+        AABB searchArea = new AABB(fish.blockPosition()).inflate(HOOK_SEARCH_RADIUS, HOOK_SEARCH_RADIUS + 16, HOOK_SEARCH_RADIUS);
         FishingHook candidate = fish.level().getEntitiesOfClass(FishingHook.class, searchArea, this::isEligible)
                 .stream()
-                .min(Comparator.comparingDouble(fish::distanceToSqr))
+                .min(Comparator.comparingDouble(candidateHook -> fish.position().distanceToSqr(
+                        ((FishingHookAccess) candidateHook).fih$hookPosition())))
                 .orElse(null);
         if (candidate == null) return false;
 
@@ -60,23 +64,22 @@ public final class FishApproachHookGoal extends Goal {
 
     private boolean isEligible(FishingHook candidate) {
         return !candidate.isRemoved() && candidate.level() == fish.level()
-                && candidate.distanceToSqr(fish) <= HOOK_SEARCH_RADIUS_SQUARED
                 && candidate instanceof FishingHookAccess access && access.fih$targets(fish);
     }
 
     @Override
     public boolean canContinueToUse() {
         return hook != null && !hook.isRemoved() && fish.isAlive()
-                && hook.level() == fish.level() && hook.distanceToSqr(fish) <= CONTINUE_RADIUS_SQUARED
+                && hook.level() == fish.level() && fish.position().distanceToSqr(hookPosition()) <= CONTINUE_RADIUS_SQUARED
                 && ((FishingHookAccess) hook).fih$targets(fish)
-                && (!biting || fish.hasLineOfSight(hook));
+                && (!biting || hasHookLineOfSight());
     }
 
     @Override
     public void tick() {
         if (hook == null) return;
-        double distanceSquared = fish.distanceToSqr(hook);
-        fish.lookAt(hook, 10.0F, 10.0F);
+        double distanceSquared = fish.position().distanceToSqr(hookPosition());
+        fish.lookAt(EntityAnchorArgument.Anchor.EYES, hookPosition());
 
         tryStartLunge(distanceSquared);
         if (biting) {
@@ -88,7 +91,7 @@ public final class FishApproachHookGoal extends Goal {
 
     private void tryStartLunge(double distanceSquared) {
         var navigation = fish.getNavigation();
-        if (!biting && fish.hasLineOfSight(hook)
+        if (!biting && hasHookLineOfSight()
                 && (distanceSquared <= CLOSE_LUNGE_DISTANCE_SQUARED
                 || (pathRequested && navigation.isDone() && distanceSquared <= PATH_LUNGE_DISTANCE_SQUARED))) {
             biting = ((FishingHookAccess) hook).fih$reserve(fish);
@@ -98,22 +101,22 @@ public final class FishApproachHookGoal extends Goal {
     }
 
     private void tickLunge(double distanceSquared) {
-        if (fish.getBoundingBox().inflate(0.15).intersects(hook.getBoundingBox()) && fish.hasLineOfSight(hook)) {
+        if (fish.getBoundingBox().inflate(0.275).contains(hookPosition()) && hasHookLineOfSight()) {
             debug("reached hook={} distance={}", hook.getId(), Math.sqrt(distanceSquared));
             ((FishingHookAccess) hook).fih$completeApproach(fish);
             stop();
             return;
         }
 
-        if (!fish.hasLineOfSight(hook) || --lungeTicks == 0) {
+        if (!hasHookLineOfSight() || --lungeTicks == 0) {
             debug("lunge stopped distance={} lineOfSight={} ticksRemaining={}",
-                    Math.sqrt(distanceSquared), fish.hasLineOfSight(hook), lungeTicks);
+                    Math.sqrt(distanceSquared), hasHookLineOfSight(), lungeTicks);
             stop();
             return;
         }
 
         fish.getNavigation().stop();
-        Vec3 direction = hook.position().subtract(fish.position());
+        Vec3 direction = hookPosition().subtract(fish.position());
         if (direction.lengthSqr() > 1.0E-6) {
             Vec3 velocity = fish.getDeltaMovement().scale(0.8).add(direction.normalize().scale(0.04));
             if (velocity.lengthSqr() > MAX_LUNGE_SPEED_SQUARED) {
@@ -151,7 +154,7 @@ public final class FishApproachHookGoal extends Goal {
                 nonWater++;
                 continue;
             }
-            double targetDistanceSquared = Vec3.atCenterOf(target).distanceToSqr(hook.position());
+            double targetDistanceSquared = Vec3.atCenterOf(target).distanceToSqr(hookPosition());
             if (away ? targetDistanceSquared <= currentDistanceSquared : targetDistanceSquared >= currentDistanceSquared) {
                 wrongDirection++;
                 continue;
@@ -167,7 +170,7 @@ public final class FishApproachHookGoal extends Goal {
             }
             var end = path.getEndNode();
             Vec3 endpoint = new Vec3(end.x + 0.5, end.y + 0.5, end.z + 0.5);
-            double endDistanceSquared = endpoint.distanceToSqr(hook.position());
+            double endDistanceSquared = endpoint.distanceToSqr(hookPosition());
             if (away ? endDistanceSquared <= currentDistanceSquared : endDistanceSquared >= currentDistanceSquared) {
                 wrongDirection++;
                 continue;
@@ -191,6 +194,15 @@ public final class FishApproachHookGoal extends Goal {
                     rejected, Math.sqrt(currentDistanceSquared));
             nextPathLogTick = fish.tickCount + 100;
         }
+    }
+
+    private Vec3 hookPosition() {
+        return ((FishingHookAccess) hook).fih$hookPosition();
+    }
+
+    private boolean hasHookLineOfSight() {
+        return fish.level().clip(new ClipContext(fish.getEyePosition(), hookPosition(),
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, fish)).getType() == HitResult.Type.MISS;
     }
 
     private boolean debugEnabled() {
