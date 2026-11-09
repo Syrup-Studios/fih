@@ -2,12 +2,23 @@ package net.syrupstudios.fih.loaders.fabric;
 
 //? if fabric {
 /*import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.PackType;
+import net.syrupstudios.fih.FishMeasurements;
 import net.syrupstudios.fih.Fih;
 
 public final class FabricEntrypoint implements ModInitializer {
     @Override
     public void onInitialize() {
         Fih.initialize("Fabric");
+        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(new SimpleSynchronousResourceReloadListener() {
+            @Override public ResourceLocation getFabricId() { return ResourceLocation.fromNamespaceAndPath("fih", "fish_measurements"); }
+            @Override public void onResourceManagerReload(net.minecraft.server.packs.resources.ResourceManager manager) {
+                FishMeasurements.reload(manager);
+            }
+        });
     }
 }
 *///?}

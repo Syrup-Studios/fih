@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.server.level.ServerLevel;
@@ -28,12 +30,14 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.FishingRodItem;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.ClipContext;
 import net.syrupstudios.fih.FihGameRules;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.ai.FishingHookAccess;
+import net.syrupstudios.fih.ai.FishMeasurementAccess;
 import net.syrupstudios.fih.client.FishPitchAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -347,7 +351,8 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             fih$configuredDepth = (int) fih$sublineLength;
         }
         int reelAmount = Math.clamp(hook.level().getGameRules().getInt(FihGameRules.REEL_AMOUNT), 0, 4000);
-        double amount = reelAmount / 1000.0;
+        double weight = hookedIn instanceof FishMeasurementAccess measurements ? measurements.fih$weightKg() : 0.0;
+        double amount = reelAmount / (1000.0 * (1.0 + weight * 0.15));
         double mainLineReeled = Math.min(amount, Math.max(0.0, fih$lineLength - fih$MIN_LINE_LENGTH));
         fih$lineLength -= mainLineReeled;
         fih$sublineLength = Math.max(0.0, fih$sublineLength - (amount - mainLineReeled));
@@ -435,10 +440,20 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     }
 
     private static ItemStack fih$catchStack(AbstractFish fish) {
-        if (fish instanceof Cod) return new ItemStack(Items.COD);
-        if (fish instanceof Salmon) return new ItemStack(Items.SALMON);
-        if (fish instanceof Pufferfish) return new ItemStack(Items.PUFFERFISH);
-        if (fish instanceof TropicalFish) return new ItemStack(Items.TROPICAL_FISH);
-        return fish.getBucketItemStack();
+        ItemStack stack;
+        if (fish instanceof Cod) stack = new ItemStack(Items.COD);
+        else if (fish instanceof Salmon) stack = new ItemStack(Items.SALMON);
+        else if (fish instanceof Pufferfish) stack = new ItemStack(Items.PUFFERFISH);
+        else if (fish instanceof TropicalFish) stack = new ItemStack(Items.TROPICAL_FISH);
+        else stack = fish.getBucketItemStack();
+        if (fish instanceof FishMeasurementAccess measurements && measurements.fih$lengthCm() > 0) {
+            CompoundTag data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+            CompoundTag fishData = data.getCompound("fih");
+            fishData.putFloat("length_cm", measurements.fih$lengthCm());
+            fishData.putFloat("weight_kg", measurements.fih$weightKg());
+            data.put("fih", fishData);
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
+        }
+        return stack;
     }
 }

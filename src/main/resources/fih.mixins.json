@@ -2,7 +2,7 @@
   "required": true,
   "package": "${modPackage}.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["FishingHookMixin", "FishingHookTrackingMixin", "FishingRodItemMixin", "PlayerCastingMixin", "AbstractFishMixin", "MobGoalSelectorAccess", "SchoolingFishMixin", "RandomStrollGoalMixin", "GameRulesAccess", "IntegerGameRuleAccess"],
+  "mixins": ["FishingHookMixin", "FishingHookTrackingMixin", "FishingRodItemMixin", "PlayerCastingMixin", "AbstractFishMixin", "AbstractFishMeasurementMixin", "BucketableMixin", "ItemMeasurementTooltipMixin", "MobGoalSelectorAccess", "SchoolingFishMixin", "RandomStrollGoalMixin", "GameRulesAccess", "IntegerGameRuleAccess"],
   "client": ["client.FishSwimPitchMixin", "client.FishRendererPitchMixin", "client.GameRendererFovAccess", "client.ItemInHandRendererAccess", "client.ItemInHandRodMotionMixin", "client.FishingLineRendererMixin", "client.FishingHookVisibilityMixin"],
   "injectors": { "defaultRequire": 1 }
 }
