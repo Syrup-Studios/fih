@@ -6,6 +6,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.GsonHelper;
 import com.google.gson.JsonObject;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.animal.AbstractFish;
+import net.minecraft.world.entity.animal.TropicalFish;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.syrupstudios.fih.ai.FishMeasurementAccess;
 
 public final class FishMeasurements {
     public record Range(float minLength, float maxLength, float minWeight, float maxWeight) {}
@@ -54,6 +62,27 @@ public final class FishMeasurements {
         synchronized (RANGES) {
             return RANGES.getOrDefault(entity, DEFAULT);
         }
+    }
+
+    public static float scaleForLength(float length, Range range) {
+        return 0.65F + 0.7F * (length / Math.max(0.01F, range.maxLength()));
+    }
+
+    public static void copyToItem(AbstractFish fish, ItemStack stack) {
+        if (fish instanceof TropicalFish tropical && stack.is(Items.TROPICAL_FISH)) {
+            ItemStack bucket = tropical.getBucketItemStack();
+            tropical.saveToBucketTag(bucket);
+            stack.set(DataComponents.BUCKET_ENTITY_DATA, bucket.get(DataComponents.BUCKET_ENTITY_DATA));
+        }
+        if (!(fish instanceof FishMeasurementAccess measurements)
+                || measurements.fih$lengthCm() <= 0 || measurements.fih$weightKg() <= 0) return;
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, data -> {
+            CompoundTag fishData = data.getCompound("fih");
+            fishData.putFloat("length_cm", measurements.fih$lengthCm());
+            fishData.putFloat("weight_kg", measurements.fih$weightKg());
+            fishData.putFloat("scale", fish.getScale());
+            data.put("fih", fishData);
+        });
     }
 
 }

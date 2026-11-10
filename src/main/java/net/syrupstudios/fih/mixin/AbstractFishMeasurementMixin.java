@@ -1,17 +1,27 @@
 package net.syrupstudios.fih.mixin;
 
+import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.AbstractFish;
+import net.minecraft.world.entity.animal.Cod;
+import net.minecraft.world.entity.animal.Salmon;
+import net.minecraft.world.entity.animal.TropicalFish;
+import net.minecraft.world.entity.animal.Pufferfish;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.LootTable;
 import net.syrupstudios.fih.FishMeasurements;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LivingEntity.class)
@@ -21,6 +31,28 @@ public abstract class AbstractFishMeasurementMixin implements FishMeasurementAcc
     @Unique private static final ResourceLocation fih$SCALE_MODIFIER = ResourceLocation.fromNamespaceAndPath("fih", "fish_size");
     @Unique private float fih$lengthCm;
     @Unique private float fih$weightKg;
+
+    @Redirect(method = "dropFromLootTable", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/storage/loot/LootTable;getRandomItems(Lnet/minecraft/world/level/storage/loot/LootParams;JLjava/util/function/Consumer;)V"))
+    private void fih$copyMeasurementsToDrops(LootTable table, LootParams params, long seed, Consumer<ItemStack> output) {
+        LivingEntity entity = (LivingEntity) (Object) this;
+        if (!(entity instanceof AbstractFish fish)) {
+            table.getRandomItems(params, seed, output);
+            return;
+        }
+        table.getRandomItems(params, seed, stack -> {
+            if (fih$isFishDrop(fish, stack)) FishMeasurements.copyToItem(fish, stack);
+            output.accept(stack);
+        });
+    }
+
+    @Unique
+    private static boolean fih$isFishDrop(AbstractFish fish, ItemStack stack) {
+        return fish instanceof Cod && (stack.is(Items.COD) || stack.is(Items.COOKED_COD))
+                || fish instanceof Salmon && (stack.is(Items.SALMON) || stack.is(Items.COOKED_SALMON))
+                || fish instanceof TropicalFish && stack.is(Items.TROPICAL_FISH)
+                || fish instanceof Pufferfish && stack.is(Items.PUFFERFISH);
+    }
 
     @Inject(method = "aiStep", at = @At("HEAD"))
     private void fih$initializeMeasurements(CallbackInfo ci) {
@@ -35,7 +67,7 @@ public abstract class AbstractFishMeasurementMixin implements FishMeasurementAcc
         var instance = fish.getAttribute(Attributes.SCALE);
         if (instance != null && instance.getModifier(fih$SCALE_MODIFIER) == null) {
             var range = FishMeasurements.range(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()));
-            double scale = 0.65 + 0.7 * (fih$lengthCm / Math.max(0.01, range.maxLength()));
+            double scale = FishMeasurements.scaleForLength(fih$lengthCm, range);
             instance.addPermanentModifier(new AttributeModifier(fih$SCALE_MODIFIER, scale - 1.0,
                     AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
         }

@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.EntityType;
@@ -17,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.syrupstudios.fih.ai.HeldFish;
+import net.syrupstudios.fih.FishMeasurements;
 
 public final class HeldFishRenderer {
     private static ClientLevel cachedLevel;
@@ -53,7 +55,11 @@ public final class HeldFishRenderer {
         float mouthHeight = stack.is(Items.SALMON) ? 0.251F : 0.126F;
         float mouthForward = stack.is(Items.SALMON) ? 0.5875F
                 : stack.is(Items.COD) ? 0.25F : stack.is(Items.PUFFERFISH) ? 0.09375F : 0.1875F;
-        pose.translate(0.0, -mouthHeight, 0.4F - mouthForward);
+        // Scale around the mouth so fish of every size stay at the grip.
+        pose.translate(0.0, 0.0, 0.4F);
+        float fishSize = fishSize(stack, fish);
+        pose.scale(fishSize, fishSize, fishSize);
+        pose.translate(0.0, -mouthHeight, -mouthForward);
         renderingFish = fish;
         try {
             EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
@@ -63,6 +69,18 @@ public final class HeldFishRenderer {
             pose.popPose();
         }
         return true;
+    }
+
+    private static float fishSize(ItemStack stack, AbstractFish fish) {
+        CompoundTag data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound("fih");
+        float scale = data.getFloat("scale");
+        if (!Float.isFinite(scale) || scale <= 0.0F) {
+            float length = data.getFloat("length_cm");
+            if (!Float.isFinite(length) || length <= 0.0F) return 1.0F;
+            scale = FishMeasurements.scaleForLength(length,
+                    FishMeasurements.range(BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType())));
+        }
+        return net.minecraft.util.Mth.clamp(scale, 0.0625F, 16.0F);
     }
 
     private static AbstractFish preview(ItemStack stack) {
