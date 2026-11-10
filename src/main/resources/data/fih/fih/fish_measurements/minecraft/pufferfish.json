@@ -1,0 +1,6 @@
+{
+  "min_length_cm": 15.0,
+  "max_length_cm": 50.0,
+  "min_weight_kg": 0.2,
+  "max_weight_kg": 3.0
+}

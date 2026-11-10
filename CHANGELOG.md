@@ -1,5 +1,4 @@
-# Changelog
-
-## Unreleased
-
-- Add release notes here.
+- Add charged fishing rod casts with adjustable strength.
+- Add a two-part fishing line and a hook and bobber model.
+- Add size and weight measurements for fish, with item tooltips.
+- Improve fish movement toward fishing hooks.

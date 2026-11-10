@@ -2,7 +2,7 @@ mod:
   id: fih
   name: Fih
   group: net.syrupstudios
-  version: 0.0.1
+  version: 0.0.2
   description: Fih mod for Minecraft.
   authors:
     - Syrup Studios
