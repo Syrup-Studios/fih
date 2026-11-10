@@ -39,6 +39,8 @@ public final class HeldFishRenderer {
 
         AbstractFish fish = preview(stack);
         if (fish == null) return false;
+        EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
+        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, stack, renderer);
         pose.pushPose();
         boolean firstPerson = context.firstPerson();
         float mirror = leftHand ? 1.0F : -1.0F;
@@ -52,23 +54,40 @@ public final class HeldFishRenderer {
         pose.mulPose(Axis.XP.rotationDegrees(-90.0F));
         float scale = firstPerson ? HeldFishPose.fishScale : HeldFishThirdPersonPose.fishScale;
         pose.scale(scale, scale, scale);
-        float mouthHeight = stack.is(Items.SALMON) ? 0.251F : 0.126F;
-        float mouthForward = stack.is(Items.SALMON) ? 0.5875F
-                : stack.is(Items.COD) ? 0.25F : stack.is(Items.PUFFERFISH) ? 0.09375F : 0.1875F;
-        // Scale around the mouth so fish of every size stay at the grip.
         pose.translate(0.0, 0.0, 0.4F);
         float fishSize = fishSize(stack, fish);
         pose.scale(fishSize, fishSize, fishSize);
-        pose.translate(0.0, -mouthHeight, -mouthForward);
+        pose.translate(0.0, -bounds.centerY(), -bounds.maxZ());
+        renderPreview(fish, renderer, pose, buffers, light);
+        pose.popPose();
+        return true;
+    }
+
+    public static boolean renderInFrame(ItemStack stack, PoseStack pose, MultiBufferSource buffers, int light) {
+        if (!HeldFish.isFish(stack)) return false;
+        AbstractFish fish = preview(stack);
+        if (fish == null) return false;
+        EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
+        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, stack, renderer);
+        pose.pushPose();
+        pose.translate(0.0F, 0.0F, -0.0625F);
+        float scale = 2.0F * fishSize(stack, fish);
+        pose.scale(scale, scale, scale);
+        pose.mulPose(Axis.YP.rotationDegrees(90.0F));
+        pose.translate(0.0F, -bounds.centerY(), -bounds.centerZ());
+        renderPreview(fish, renderer, pose, buffers, light);
+        pose.popPose();
+        return true;
+    }
+
+    static void renderPreview(AbstractFish fish, EntityRenderer<? super AbstractFish> renderer,
+            PoseStack pose, MultiBufferSource buffers, int light) {
         renderingFish = fish;
         try {
-            EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
             renderer.render(fish, 0.0F, 0.0F, pose, buffers, light);
         } finally {
             renderingFish = null;
-            pose.popPose();
         }
-        return true;
     }
 
     private static float fishSize(ItemStack stack, AbstractFish fish) {
