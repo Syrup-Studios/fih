@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -22,7 +23,6 @@ import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.entity.animal.Salmon;
 import net.minecraft.world.entity.animal.TropicalFish;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.ItemStack;
@@ -34,6 +34,7 @@ import net.minecraft.world.level.ClipContext;
 import net.syrupstudios.fih.FihGameRules;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.ai.FishingHookAccess;
+import net.syrupstudios.fih.ai.HeldFish;
 import net.syrupstudios.fih.client.FishPitchAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -423,14 +424,12 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             if (owner != null && cooldown > 0) owner.getCooldowns().addCooldown(rod.getItem(), cooldown);
         }
         if (!(hookedIn instanceof AbstractFish fish) || fish.isRemoved() || !fish.isAlive()
-                || !(fish.level() instanceof ServerLevel level)) return;
+                || !(fish.level() instanceof ServerLevel)) return;
         Player player = ((FishingHook) (Object) this).getPlayerOwner();
         if (player == null) return;
 
         ItemStack catchStack = fih$catchStack(fish);
-        if (!player.getInventory().add(catchStack)) {
-            level.addFreshEntity(new ItemEntity(level, player.getX(), player.getY(), player.getZ(), catchStack));
-        }
+        HeldFish.holdCatch(player, catchStack);
         fish.discard();
     }
 
@@ -438,7 +437,13 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         if (fish instanceof Cod) return new ItemStack(Items.COD);
         if (fish instanceof Salmon) return new ItemStack(Items.SALMON);
         if (fish instanceof Pufferfish) return new ItemStack(Items.PUFFERFISH);
-        if (fish instanceof TropicalFish) return new ItemStack(Items.TROPICAL_FISH);
+        if (fish instanceof TropicalFish tropical) {
+            ItemStack bucket = tropical.getBucketItemStack();
+            tropical.saveToBucketTag(bucket);
+            ItemStack caught = new ItemStack(Items.TROPICAL_FISH);
+            caught.set(DataComponents.BUCKET_ENTITY_DATA, bucket.get(DataComponents.BUCKET_ENTITY_DATA));
+            return caught;
+        }
         return fish.getBucketItemStack();
     }
 }
