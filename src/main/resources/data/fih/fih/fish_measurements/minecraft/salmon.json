@@ -1,4 +1,5 @@
 {
+  "additional_drops": ["minecraft:cooked_salmon"],
   "min_length_cm": 40.0,
   "max_length_cm": 100.0,
   "min_weight_kg": 1.0,

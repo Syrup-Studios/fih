@@ -7,12 +7,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.AbstractFish;
-import net.minecraft.world.entity.animal.Cod;
-import net.minecraft.world.entity.animal.Salmon;
-import net.minecraft.world.entity.animal.TropicalFish;
-import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.syrupstudios.fih.FishMeasurements;
@@ -41,17 +36,9 @@ public abstract class AbstractFishMeasurementMixin implements FishMeasurementAcc
             return;
         }
         table.getRandomItems(params, seed, stack -> {
-            if (fih$isFishDrop(fish, stack)) FishMeasurements.copyToItem(fish, stack);
+            if (FishMeasurements.isFishDrop(fish, stack)) FishMeasurements.copyToItem(fish, stack);
             output.accept(stack);
         });
-    }
-
-    @Unique
-    private static boolean fih$isFishDrop(AbstractFish fish, ItemStack stack) {
-        return fish instanceof Cod && (stack.is(Items.COD) || stack.is(Items.COOKED_COD))
-                || fish instanceof Salmon && (stack.is(Items.SALMON) || stack.is(Items.COOKED_SALMON))
-                || fish instanceof TropicalFish && stack.is(Items.TROPICAL_FISH)
-                || fish instanceof Pufferfish && stack.is(Items.PUFFERFISH);
     }
 
     @Inject(method = "aiStep", at = @At("HEAD"))

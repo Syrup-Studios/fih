@@ -18,14 +18,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.animal.AbstractFish;
-import net.minecraft.world.entity.animal.Cod;
-import net.minecraft.world.entity.animal.Pufferfish;
-import net.minecraft.world.entity.animal.Salmon;
-import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.HitResult;
@@ -436,12 +431,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     }
 
     private static ItemStack fih$catchStack(AbstractFish fish) {
-        ItemStack stack;
-        if (fish instanceof Cod) stack = new ItemStack(Items.COD);
-        else if (fish instanceof Salmon) stack = new ItemStack(Items.SALMON);
-        else if (fish instanceof Pufferfish) stack = new ItemStack(Items.PUFFERFISH);
-        else if (fish instanceof TropicalFish) stack = new ItemStack(Items.TROPICAL_FISH);
-        else stack = fish.getBucketItemStack();
+        ItemStack stack = FishMeasurements.catchItem(fish);
         FishMeasurements.copyToItem(fish, stack);
         return stack;
     }

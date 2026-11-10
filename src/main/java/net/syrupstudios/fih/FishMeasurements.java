@@ -1,28 +1,30 @@
 package net.syrupstudios.fih;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.GsonHelper;
 import com.google.gson.JsonObject;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.animal.AbstractFish;
-import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
 
 public final class FishMeasurements {
     public record Range(float minLength, float maxLength, float minWeight, float maxWeight) {}
 
-    private static final Map<ResourceLocation, Range> RANGES = new HashMap<>();
+    private record Definition(Range range, ResourceLocation item, List<ResourceLocation> additionalDrops) {}
+    private static final Map<ResourceLocation, Definition> DEFINITIONS = new HashMap<>();
     private static final Range DEFAULT = new Range(12, 45, 0.15F, 1.8F);
 
     public static void reload(ResourceManager manager) {
-        Map<ResourceLocation, Range> loaded = new HashMap<>();
+        Map<ResourceLocation, Definition> loaded = new HashMap<>();
         manager.listResources("fih/fish_measurements", id -> id.getPath().endsWith(".json"))
                 .forEach((file, resource) -> {
                     String path = file.getPath();
@@ -43,7 +45,15 @@ public final class FishMeasurements {
                         if (Float.isFinite(minLength) && Float.isFinite(maxLength) && Float.isFinite(minWeight)
                                 && Float.isFinite(maxWeight) && minLength > 0 && maxLength >= minLength
                                 && minWeight > 0 && maxWeight >= minWeight) {
-                            loaded.put(entity, new Range(minLength, maxLength, minWeight, maxWeight));
+                            ResourceLocation item = ResourceLocation.parse(GsonHelper.getAsString(json, "item", entity.toString()));
+                            List<ResourceLocation> additionalDrops = new ArrayList<>();
+                            if (json.has("additional_drops")) {
+                                for (var entry : GsonHelper.getAsJsonArray(json, "additional_drops")) {
+                                    additionalDrops.add(ResourceLocation.parse(entry.getAsString()));
+                                }
+                            }
+                            loaded.put(entity, new Definition(new Range(minLength, maxLength, minWeight, maxWeight),
+                                    item, List.copyOf(additionalDrops)));
                         } else {
                             Fih.LOGGER.warn("Ignoring invalid fish measurement range for {}", entity);
                         }
@@ -51,16 +61,17 @@ public final class FishMeasurements {
                         Fih.LOGGER.warn("Could not load fish measurement range {}", file, e);
                     }
                 });
-        synchronized (RANGES) {
-            RANGES.clear();
-            RANGES.putAll(loaded);
+        synchronized (DEFINITIONS) {
+            DEFINITIONS.clear();
+            DEFINITIONS.putAll(loaded);
         }
         Fih.LOGGER.info("Loaded {} fish measurement ranges", loaded.size());
     }
 
     public static Range range(ResourceLocation entity) {
-        synchronized (RANGES) {
-            return RANGES.getOrDefault(entity, DEFAULT);
+        synchronized (DEFINITIONS) {
+            Definition definition = DEFINITIONS.get(entity);
+            return definition != null ? definition.range() : DEFAULT;
         }
     }
 
@@ -68,21 +79,45 @@ public final class FishMeasurements {
         return 0.65F + 0.7F * (length / Math.max(0.01F, range.maxLength()));
     }
 
-    public static void copyToItem(AbstractFish fish, ItemStack stack) {
-        if (fish instanceof TropicalFish tropical && stack.is(Items.TROPICAL_FISH)) {
-            ItemStack bucket = tropical.getBucketItemStack();
-            tropical.saveToBucketTag(bucket);
-            stack.set(DataComponents.BUCKET_ENTITY_DATA, bucket.get(DataComponents.BUCKET_ENTITY_DATA));
+    private static Definition definition(AbstractFish fish) {
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType());
+        synchronized (DEFINITIONS) {
+            Definition definition = DEFINITIONS.get(id);
+            return definition != null ? definition : new Definition(DEFAULT, id, List.of());
         }
-        if (!(fish instanceof FishMeasurementAccess measurements)
-                || measurements.fih$lengthCm() <= 0 || measurements.fih$weightKg() <= 0) return;
+    }
+
+    public static ItemStack catchItem(AbstractFish fish) {
+        return BuiltInRegistries.ITEM.getOptional(definition(fish).item())
+                .map(ItemStack::new).orElseGet(fish::getBucketItemStack);
+    }
+
+    public static boolean isFishDrop(AbstractFish fish, ItemStack stack) {
+        Definition definition = definition(fish);
+        ResourceLocation item = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return item.equals(definition.item()) || definition.additionalDrops().contains(item);
+    }
+
+    public static void copyToItem(AbstractFish fish, ItemStack stack) {
+        Definition definition = definition(fish);
+        boolean displayFish = BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(definition.item());
+        if (displayFish) {
+            ItemStack bucket = fish.getBucketItemStack();
+            fish.saveToBucketTag(bucket);
+            var bucketData = bucket.get(DataComponents.BUCKET_ENTITY_DATA);
+            if (bucketData != null) stack.set(DataComponents.BUCKET_ENTITY_DATA, bucketData);
+        }
         CustomData.update(DataComponents.CUSTOM_DATA, stack, data -> {
             CompoundTag fishData = data.getCompound("fih");
-            fishData.putFloat("length_cm", measurements.fih$lengthCm());
-            fishData.putFloat("weight_kg", measurements.fih$weightKg());
-            fishData.putFloat("scale", fish.getScale());
+            fishData.putString("entity_type", BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()).toString());
+            fishData.putBoolean("display_fish", displayFish);
+            if (fish instanceof FishMeasurementAccess measurements
+                    && measurements.fih$lengthCm() > 0 && measurements.fih$weightKg() > 0) {
+                fishData.putFloat("length_cm", measurements.fih$lengthCm());
+                fishData.putFloat("weight_kg", measurements.fih$weightKg());
+                fishData.putFloat("scale", fish.getScale());
+            }
             data.put("fih", fishData);
         });
     }
-
 }

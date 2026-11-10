@@ -9,20 +9,21 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.resources.ResourceLocation;
+import java.util.HashMap;
+import java.util.Map;
 import net.minecraft.world.entity.animal.AbstractFish;
-import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.syrupstudios.fih.ai.HeldFish;
 import net.syrupstudios.fih.FishMeasurements;
 
 public final class HeldFishRenderer {
     private static ClientLevel cachedLevel;
-    private static AbstractFish cod, salmon, tropicalFish, pufferfish;
+    private static final Map<String, AbstractFish> previews = new HashMap<>();
     private static AbstractFish renderingFish;
 
     private HeldFishRenderer() {}
@@ -33,14 +34,13 @@ public final class HeldFishRenderer {
 
     public static boolean render(ItemStack stack, ItemDisplayContext context, boolean leftHand,
             PoseStack pose, MultiBufferSource buffers, int light) {
-        if ((!context.firstPerson() && context != ItemDisplayContext.THIRD_PERSON_LEFT_HAND
-                && context != ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
-                || !HeldFish.isFish(stack)) return false;
+        if (!context.firstPerson() && context != ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                && context != ItemDisplayContext.THIRD_PERSON_RIGHT_HAND) return false;
 
         AbstractFish fish = preview(stack);
         if (fish == null) return false;
         EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
-        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, stack, renderer);
+        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, renderer);
         pose.pushPose();
         boolean firstPerson = context.firstPerson();
         float mirror = leftHand ? 1.0F : -1.0F;
@@ -64,11 +64,10 @@ public final class HeldFishRenderer {
     }
 
     public static boolean renderInFrame(ItemStack stack, PoseStack pose, MultiBufferSource buffers, int light) {
-        if (!HeldFish.isFish(stack)) return false;
         AbstractFish fish = preview(stack);
         if (fish == null) return false;
         EntityRenderer<? super AbstractFish> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(fish);
-        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, stack, renderer);
+        FishModelBounds.Bounds bounds = FishModelBounds.get(fish, renderer);
         pose.pushPose();
         pose.translate(0.0F, 0.0F, -0.0625F);
         float scale = 2.0F * fishSize(stack, fish);
@@ -104,32 +103,24 @@ public final class HeldFishRenderer {
 
     private static AbstractFish preview(ItemStack stack) {
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) return null;
+        ResourceLocation typeId = HeldFish.fishType(stack);
+        if (level == null || typeId == null) return null;
         if (cachedLevel != level) {
             cachedLevel = level;
-            cod = salmon = tropicalFish = pufferfish = null;
+            previews.clear();
         }
-        if (stack.is(Items.COD)) return cod != null ? cod : (cod = EntityType.COD.create(level));
-        if (stack.is(Items.SALMON)) return salmon != null ? salmon : (salmon = EntityType.SALMON.create(level));
-        if (stack.is(Items.TROPICAL_FISH)) {
-            if (tropicalFish == null) tropicalFish = EntityType.TROPICAL_FISH.create(level);
-            if (tropicalFish instanceof TropicalFish tropical) {
-                CustomData data = stack.getOrDefault(DataComponents.BUCKET_ENTITY_DATA, CustomData.EMPTY);
-                CompoundTag saved = data.copyTag();
-                if (!saved.contains(TropicalFish.BUCKET_VARIANT_TAG, Tag.TAG_INT)) {
-                    saved = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-                }
-                int variant = saved.contains(TropicalFish.BUCKET_VARIANT_TAG, Tag.TAG_INT)
-                        ? saved.getInt(TropicalFish.BUCKET_VARIANT_TAG)
-                        : saved.contains("Variant", Tag.TAG_INT) ? saved.getInt("Variant")
-                        : TropicalFish.COMMON_VARIANTS.getFirst().getPackedId();
-                CompoundTag variantTag = new CompoundTag();
-                variantTag.putInt(TropicalFish.BUCKET_VARIANT_TAG, variant);
-                tropical.loadFromBucketTag(variantTag);
-            }
-            return tropicalFish;
-        }
-        if (stack.is(Items.PUFFERFISH)) return pufferfish != null ? pufferfish : (pufferfish = EntityType.PUFFERFISH.create(level));
-        return null;
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(typeId).orElse(null);
+        if (type == null) return null;
+        CompoundTag bucketData = stack.getOrDefault(DataComponents.BUCKET_ENTITY_DATA, CustomData.EMPTY).copyTag();
+        bucketData.remove("fih");
+        String key = typeId + ":" + bucketData;
+        AbstractFish fish = previews.get(key);
+        if (fish != null) return fish;
+        Entity entity = type.create(level);
+        if (!(entity instanceof AbstractFish created)) return null;
+        created.loadFromBucketTag(bucketData);
+        if (previews.size() >= 128) previews.clear();
+        previews.put(key, created);
+        return created;
     }
 }
