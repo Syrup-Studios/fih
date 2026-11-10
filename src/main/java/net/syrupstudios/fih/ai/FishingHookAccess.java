@@ -9,8 +9,11 @@ public interface FishingHookAccess {
     boolean fih$reserve(AbstractFish fish);
     void fih$release(AbstractFish fish);
     void fih$completeApproach(AbstractFish fish);
+    void fih$startReel();
     void fih$reelIn();
     float fih$visualTension(float partialTick);
+    float fih$visualLowerTension(float partialTick);
+    float fih$lineSoundSpeed(float partialTick);
     Vec3 fih$hookPosition();
     Vec3 fih$renderHookPosition(float partialTick);
 }

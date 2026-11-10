@@ -7,15 +7,26 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.FihGameRules;
 import net.syrupstudios.fih.ai.FishApproachHookGoal;
+import net.syrupstudios.fih.ai.FishEscapeHookGoal;
+import net.syrupstudios.fih.ai.HookedFishAccess;
 import net.syrupstudios.fih.ai.FishingHookAccess;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(AbstractFish.class)
-public abstract class AbstractFishMixin {
+public abstract class AbstractFishMixin implements HookedFishAccess {
+    @Unique private FishingHook fih$fightingHook;
+
+    @Override public void fih$setFightingHook(FishingHook hook) { fih$fightingHook = hook; }
+    @Override public FishingHook fih$fightingHook() {
+        if (fih$fightingHook != null && (fih$fightingHook.isRemoved()
+                || fih$fightingHook.getHookedIn() != (Object) this)) fih$fightingHook = null;
+        return fih$fightingHook;
+    }
     @Redirect(method = "registerGoals", at = @At(value = "FIELD", target = "Lnet/minecraft/world/entity/EntitySelector;NO_SPECTATORS:Ljava/util/function/Predicate;"))
     private java.util.function.Predicate<Entity> fih$avoidCreativePlayers() {
         return EntitySelector.NO_CREATIVE_OR_SPECTATOR;
@@ -23,7 +34,9 @@ public abstract class AbstractFishMixin {
 
     @Inject(method = "registerGoals", at = @At("TAIL"))
     private void fih$addHookApproachGoal(CallbackInfo ci) {
-        ((MobGoalSelectorAccess) this).fih$goalSelector().addGoal(3, new FishApproachHookGoal((AbstractFish) (Object) this));
+        var goals = ((MobGoalSelectorAccess) this).fih$goalSelector();
+        goals.addGoal(1, new FishEscapeHookGoal((AbstractFish) (Object) this));
+        goals.addGoal(3, new FishApproachHookGoal((AbstractFish) (Object) this));
     }
 
     @Inject(method = "aiStep", at = @At("TAIL"))

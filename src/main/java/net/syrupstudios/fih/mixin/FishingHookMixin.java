@@ -15,8 +15,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FishingHook;
@@ -31,6 +32,7 @@ import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.ai.FishingHookAccess;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
 import net.syrupstudios.fih.ai.HeldFish;
+import net.syrupstudios.fih.ai.HookedFishAccess;
 import net.syrupstudios.fih.client.FishPitchAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -54,29 +56,42 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     @Unique private double fih$sublineLength = -1.0;
     @Unique private int fih$configuredDepth = -1;
     @Unique private boolean fih$lineLocked;
-    @Unique private int fih$nextEscapePathTick;
     @Unique private float fih$previousTension;
     @Unique private float fih$currentTension;
+    @Unique private float fih$previousLowerTension;
+    @Unique private float fih$currentLowerTension;
     @Unique private Vec3 fih$subhookPosition;
     @Unique private Vec3 fih$subhookVelocity = Vec3.ZERO;
     @Unique private Vec3 fih$bobberBeforeTick;
     @Unique private boolean fih$enteredWater;
     @Unique private Vec3 fih$previousHookOffset = Vec3.ZERO;
     @Unique private Vec3 fih$currentHookOffset = Vec3.ZERO;
+    @Unique private long fih$lineMotionTick = Long.MIN_VALUE;
+    @Unique private float fih$previousLineMotion, fih$currentLineMotion;
+    @Unique private float fih$reelSpeed;
 
     @Unique private static final double fih$MIN_LINE_LENGTH = 2.0;
+    @Unique private static final double fih$SOUND_FULL_REEL_RATE = 0.07;
+    @Unique private static final float fih$REEL_IMPULSE = 1.0F / 3.0F;
+    @Unique private static final float fih$REEL_ACCELERATION = 1.0F / 30.0F;
+    @Unique private static final float fih$REEL_DECELERATION = 1.0F / 20.0F;
     @Unique private static final EntityDataAccessor<Integer> fih$TENSION =
+            SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.INT);
+    @Unique private static final EntityDataAccessor<Integer> fih$LOWER_TENSION =
             SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.INT);
     @Unique private static final EntityDataAccessor<Float> fih$HOOK_X = SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.FLOAT);
     @Unique private static final EntityDataAccessor<Float> fih$HOOK_Y = SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.FLOAT);
     @Unique private static final EntityDataAccessor<Float> fih$HOOK_Z = SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.FLOAT);
+    @Unique private static final EntityDataAccessor<Float> fih$LINE_MOTION = SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.FLOAT);
 
     @Inject(method = "defineSynchedData", at = @At("TAIL"))
     private void fih$defineTensionData(SynchedEntityData.Builder builder, CallbackInfo ci) {
         builder.define(fih$TENSION, 0);
+        builder.define(fih$LOWER_TENSION, 0);
         builder.define(fih$HOOK_X, 0.0F);
         builder.define(fih$HOOK_Y, 0.0F);
         builder.define(fih$HOOK_Z, 0.0F);
+        builder.define(fih$LINE_MOTION, 0.0F);
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
@@ -94,8 +109,13 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             return;
         }
         fih$previousTension = fih$currentTension;
+        fih$previousLineMotion = fih$currentLineMotion;
+        fih$currentLineMotion = hook.getEntityData().get(fih$LINE_MOTION);
         float target = hook.getEntityData().get(fih$TENSION) / 20.0F;
         fih$currentTension = Mth.lerp(0.3F, fih$currentTension, target);
+        fih$previousLowerTension = fih$currentLowerTension;
+        fih$currentLowerTension = Mth.lerp(0.3F, fih$currentLowerTension,
+                hook.getEntityData().get(fih$LOWER_TENSION) / 20.0F);
         fih$previousHookOffset = fih$currentHookOffset;
         fih$currentHookOffset = new Vec3(hook.getEntityData().get(fih$HOOK_X),
                 hook.getEntityData().get(fih$HOOK_Y), hook.getEntityData().get(fih$HOOK_Z));
@@ -105,6 +125,18 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     @Unique
     public float fih$visualTension(float partialTick) {
         return Mth.lerp(partialTick, fih$previousTension, fih$currentTension);
+    }
+
+    @Override
+    @Unique
+    public float fih$visualLowerTension(float partialTick) {
+        return Mth.lerp(partialTick, fih$previousLowerTension, fih$currentLowerTension);
+    }
+
+    @Override
+    @Unique
+    public float fih$lineSoundSpeed(float partialTick) {
+        return Mth.lerp(partialTick, fih$previousLineMotion, fih$currentLineMotion);
     }
 
     @Unique
@@ -135,7 +167,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             target = "Lnet/minecraft/world/entity/projectile/FishingHook;setDeltaMovement(DDD)V"))
     private void fih$allowBobberToLeaveWater(FishingHook hook, double x, double y, double z) {
         Player player = hook.getPlayerOwner();
-        if (fih$isReeling(player) && fih$lineLocked && fih$lineLength >= 0.0
+        if ((fih$isReeling(player) || fih$reelSpeed > 0.0F) && player != null && fih$lineLocked && fih$lineLength >= 0.0
                 && hook.getDeltaMovement().y > 0.0) {
             Vec3 playerCenter = player.position().add(0.0, player.getBbHeight() * 0.5, 0.0);
             if (playerCenter.distanceTo(hook.position()) > fih$lineLength) {
@@ -172,13 +204,60 @@ public abstract class FishingHookMixin implements FishingHookAccess {
                     hook.setDeltaMovement(hook.getDeltaMovement().scale(0.9));
                 }
             }
-            if (!hook.level().isClientSide) fih$tickFight(hook, fish);
+            if (!hook.level().isClientSide) {
+                ((HookedFishAccess) fish).fih$setFightingHook(hook);
+                fih$tickFight(hook, fish);
+            }
         }
         if (!hook.level().isClientSide) {
             fih$updateCastLine(hook);
+            fih$coastReel(hook);
+            if (hook.isRemoved()) return;
             fih$tickSubhook(hook);
+            fih$payOutLine(hook);
+            if (fih$lineMotionTick != hook.level().getGameTime()) hook.getEntityData().set(fih$LINE_MOTION, 0.0F);
             if (fih$lineLength >= 0.0) fih$applyRodLineTension(hook);
         }
+    }
+
+    @Unique
+    private void fih$payOutLine(FishingHook hook) {
+        Player player = hook.getPlayerOwner();
+        if (player == null || !(hookedIn instanceof AbstractFish fish) || !fish.isAlive()) return;
+        Vec3 playerCenter = player.position().add(0.0, player.getBbHeight() * 0.5, 0.0);
+        Vec3 mouth = fih$fishMouth(fish, 1.0F);
+        Vec3 away = mouth.subtract(playerCenter);
+        double distance = away.length();
+        double rodDistance = hook.position().distanceTo(playerCenter);
+        double lowerDistance = mouth.distanceTo(hook.position());
+        double stretch = rodDistance + lowerDistance - Math.max(0.0, fih$lineLength) - Math.max(0.0, fih$sublineLength);
+        double outwardSpeed = distance > 1.0E-6
+                ? fish.getDeltaMovement().subtract(player.getDeltaMovement()).dot(away.scale(1.0 / distance)) : 0.0;
+        String reason;
+        double payout = 0.0;
+        if (fih$isReeling(player)) reason = "reeling";
+        else if (fih$reelSpeed > 0.0F) reason = "reel_coasting";
+        else if (!fih$lineLocked || fih$lineLength < 0.0 || fih$sublineLength < 0.0) reason = "line_not_ready";
+        else if (fih$lineLength >= 128.0) reason = "line_limit";
+        else if (stretch <= 0.0) reason = "slack";
+        else if (outwardSpeed <= 0.0) reason = "not_moving_away";
+        else {
+            payout = Math.min(stretch, 128.0 - fih$lineLength);
+            reason = "paying_out";
+        }
+        fih$lineLength += payout;
+        if (payout > 0.0) fih$recordLineMovement(hook, -payout / 0.12);
+        if (hook.tickCount % 20 == 0 && hook.level().getGameRules().getInt(FihGameRules.DEBUG) > 0) {
+            Fih.LOGGER.info("[fih-debug] payout hook={} fish={} reason={} rodDistance={} lowerDistance={} rodLine={} lowerLine={} combinedStretch={} outwardSpeed={} payout={} reelSpeed={} fishVelocity={} navTarget={}",
+                    hook.getId(), fish.getId(), reason, rodDistance, lowerDistance, fih$lineLength, fih$sublineLength,
+                    stretch, outwardSpeed, payout, fih$reelSpeed, fish.getDeltaMovement(), fish.getNavigation().getTargetPos());
+        }
+    }
+
+    @Unique
+    private void fih$recordLineMovement(FishingHook hook, double distance) {
+        fih$lineMotionTick = hook.level().getGameTime();
+        hook.getEntityData().set(fih$LINE_MOTION, (float) distance);
     }
 
     @Unique
@@ -257,13 +336,23 @@ public abstract class FishingHookMixin implements FishingHookAccess {
 
         Vec3 floatToHook = fih$subhookPosition.subtract(bobber);
         double distance = floatToHook.length();
+        boolean freeSpool = hookedIn instanceof AbstractFish && !fih$isReeling(hook.getPlayerOwner()) && fih$reelSpeed <= 0.0F;
+        Player owner = hook.getPlayerOwner();
+        if (freeSpool && owner != null && fih$lineLength >= 0.0) {
+            Vec3 playerCenter = owner.position().add(0.0, owner.getBbHeight() * 0.5, 0.0);
+            maxLength = Math.max(maxLength, fih$lineLength + maxLength - bobber.distanceTo(playerCenter));
+        }
         double stretch = distance - maxLength;
+        float lowerTension = maxLength > 1.0E-6
+                ? Mth.clamp((float) ((distance / maxLength - 0.85) / 0.15), 0.0F, 1.0F)
+                : distance > 1.0E-6 ? 1.0F : 0.0F;
+        hook.getEntityData().set(fih$LOWER_TENSION, Math.round(lowerTension * 20.0F));
         if (stretch > 0.0 && distance > 1.0E-6) {
             Vec3 direction = floatToHook.scale(1.0 / distance);
             double pull = Math.min(0.12, 0.02 + stretch * 0.05);
             hook.setDeltaMovement(hook.getDeltaMovement().add(direction.scale(pull)));
             if (hookedIn instanceof AbstractFish fish && fish.isAlive()) {
-                fish.setDeltaMovement(fish.getDeltaMovement().add(direction.scale(-pull)));
+                if (!freeSpool) fish.setDeltaMovement(fish.getDeltaMovement().add(direction.scale(-pull)));
             } else {
                 fih$subhookPosition = bobber.add(direction.scale(maxLength));
                 double outwardSpeed = fih$subhookVelocity.dot(direction);
@@ -283,11 +372,16 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         Vec3 towardPlayer = player.position().add(0.0, player.getBbHeight() * 0.5, 0.0)
                 .subtract(hook.position());
         double distance = towardPlayer.length();
-        double stretch = distance - fih$lineLength;
+        boolean freeSpool = hookedIn instanceof AbstractFish && !fih$isReeling(player) && fih$reelSpeed <= 0.0F;
+        double allowedLength = freeSpool && fih$subhookPosition != null
+                ? Math.max(0.0, fih$lineLength + fih$sublineLength - hook.position().distanceTo(fih$subhookPosition))
+                : fih$lineLength;
+        double stretch = distance - allowedLength;
         fih$syncTension(stretch);
         if (stretch > 0.0 && distance > 1.0E-6) {
             double pull = Math.min(0.12, 0.025 + stretch * 0.04);
-            if (hookedIn instanceof AbstractFish && fih$isReeling(player) && towardPlayer.y > 0.0) {
+            if (freeSpool) pull = Math.min(0.02, 0.005 + stretch * 0.02);
+            if (hookedIn instanceof AbstractFish && (fih$isReeling(player) || fih$reelSpeed > 0.0F) && towardPlayer.y > 0.0) {
                 // A fighting fish can pull the lower line downward at 0.12 per tick. Give the
                 // actively reeled rod enough force to lift both the float and fish against it.
                 pull = Math.min(0.32, 0.16 + stretch * 0.08);
@@ -314,16 +408,17 @@ public abstract class FishingHookMixin implements FishingHookAccess {
 
         Vec3 direction = towardPlayer.scale(1.0 / distance);
         if (fish.isInWater()) {
-            fish.setDeltaMovement(fish.getDeltaMovement().add(direction.scale(-0.012)));
-            if (fish.tickCount >= fih$nextEscapePathTick) {
-                fih$nextEscapePathTick = fish.tickCount + 30;
-                Vec3 escape = DefaultRandomPos.getPosAway(fish, 8, 4, player.position());
-                if (escape != null && fish.level().getFluidState(BlockPos.containing(escape)).is(FluidTags.WATER)) {
-                    fish.getNavigation().moveTo(escape.x, escape.y, escape.z, 1.0);
-                }
-            }
+            fish.setDeltaMovement(fish.getDeltaMovement().add(direction.scale(-0.035)));
         }
 
+    }
+
+    @Override
+    @Unique
+    public void fih$startReel() {
+        if (hookedIn == null || hookedIn instanceof AbstractFish) {
+            fih$reelSpeed = Math.min(1.0F, fih$reelSpeed + fih$REEL_IMPULSE);
+        }
     }
 
     @Override
@@ -334,6 +429,36 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         if (hookedIn != null && !(hookedIn instanceof AbstractFish)) return;
         Player player = hook.getPlayerOwner();
         if (player == null) return;
+        fih$reelSpeed = Math.min(1.0F, fih$reelSpeed + fih$REEL_ACCELERATION);
+        fih$reelStep(hook, player, fih$reelSpeed);
+    }
+
+    @Unique
+    private void fih$coastReel(FishingHook hook) {
+        Player player = hook.getPlayerOwner();
+        if (player == null || fih$isReeling(player) || fih$reelSpeed <= 0.0F) return;
+        if (hookedIn != null && !(hookedIn instanceof AbstractFish)) {
+            fih$reelSpeed = 0.0F;
+            return;
+        }
+        fih$reelSpeed = Math.max(0.0F, fih$reelSpeed - fih$REEL_DECELERATION);
+        if (fih$reelSpeed <= 0.0F) return;
+        fih$reelStep(hook, player, fih$reelSpeed);
+        double distanceSquared = hookedIn == null ? fih$hookPosition().distanceToSqr(player.position())
+                : hookedIn.distanceToSqr(player);
+        if (distanceSquared > 6.25) return;
+        InteractionHand hand = player.getMainHandItem().getItem() instanceof FishingRodItem
+                ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+        ItemStack rod = player.getItemInHand(hand);
+        if (!(rod.getItem() instanceof FishingRodItem)) return;
+        int damage = hook.retrieve(rod);
+        rod.hurtAndBreak(damage, player, LivingEntity.getSlotForHand(hand));
+        hook.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 1.0F, 1.0F);
+    }
+
+    @Unique
+    private void fih$reelStep(FishingHook hook, Player player, float speed) {
         if (fih$lineLength < 0.0) {
             fih$lineLength = Math.max(fih$MIN_LINE_LENGTH,
                     player.position().add(0.0, player.getBbHeight() * 0.5, 0.0).distanceTo(hook.position()));
@@ -345,10 +470,13 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         }
         int reelAmount = Math.clamp(hook.level().getGameRules().getInt(FihGameRules.REEL_AMOUNT), 0, 4000);
         double weight = hookedIn instanceof FishMeasurementAccess measurements ? measurements.fih$weightKg() : 0.0;
-        double amount = reelAmount / (1000.0 * (1.0 + weight * 0.15));
+        double amount = speed * reelAmount / (1000.0 * (1.0 + weight * 0.15));
         double mainLineReeled = Math.min(amount, Math.max(0.0, fih$lineLength - fih$MIN_LINE_LENGTH));
         fih$lineLength -= mainLineReeled;
+        double lowerBefore = fih$sublineLength;
         fih$sublineLength = Math.max(0.0, fih$sublineLength - (amount - mainLineReeled));
+        double reeled = mainLineReeled + lowerBefore - fih$sublineLength;
+        fih$recordLineMovement(hook, reeled / fih$SOUND_FULL_REEL_RATE);
     }
 
     @Override

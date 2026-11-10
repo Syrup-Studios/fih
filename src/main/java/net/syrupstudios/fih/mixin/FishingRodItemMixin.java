@@ -39,6 +39,9 @@ public abstract class FishingRodItemMixin extends Item {
         if (hooked != null && !(hooked instanceof AbstractFish)) return;
         ((CastingAccess) player).fih$setCasting(player.fishing == null);
         player.startUsingItem(hand);
+        if (!level.isClientSide && player.fishing != null) {
+            ((FishingHookAccess) player.fishing).fih$startReel();
+        }
         cir.setReturnValue(InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide()));
     }
 

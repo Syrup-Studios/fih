@@ -1,0 +1,4 @@
+{
+  "reel_in": { "sounds": [{ "name": "fih:reel_in" }] },
+  "line_out": { "sounds": [{ "name": "fih:reel_in" }] }
+}

@@ -20,7 +20,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
+import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -35,6 +38,36 @@ public abstract class FishingLineRendererMixin {
     private static final float fih$BOBBER_TOP = 2.5F / 16.0F;
     private static final float fih$BOBBER_BOTTOM = -1.5F / 16.0F;
     private static final float fih$HOOK_TOP = 2.0F / 16.0F;
+    @Unique private Vec3 fih$bobberAxis = new Vec3(0.0, 1.0, 0.0);
+
+    @Shadow
+    private Vec3 getPlayerHandPos(Player player, float swing, float partialTick) { throw new AssertionError(); }
+
+    @Inject(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"))
+    private void fih$alignBobber(FishingHook hook, float yaw, float partialTick, PoseStack pose,
+            MultiBufferSource buffers, int light, CallbackInfo ci) {
+        Player player = hook.getPlayerOwner();
+        fih$bobberAxis = new Vec3(0.0, 1.0, 0.0);
+        if (player == null) return;
+        Vec3 bobber = hook.getPosition(partialTick);
+        float swing = Mth.sin(Mth.sqrt(player.getAttackAnim(partialTick)) * Mth.PI);
+        Vec3 rodLine = getPlayerHandPos(player, swing, partialTick).subtract(bobber);
+        Vec3 lowerLine = ((FishingHookAccess) hook).fih$renderHookPosition(partialTick).subtract(bobber);
+        FishingHookAccess access = (FishingHookAccess) hook;
+        float upperTension = access.fih$visualTension(partialTick);
+        float lowerTension = access.fih$visualLowerTension(partialTick);
+        Vec3 target = rodLine.normalize().scale(0.15 + upperTension);
+        if (lowerLine.lengthSqr() > 1.0E-6) {
+            target = target.subtract(lowerLine.normalize().scale(0.15 + lowerTension));
+        }
+        if (target.lengthSqr() < 1.0E-6) return;
+        target = target.normalize();
+        float influence = 0.15F + 0.85F * Math.max(upperTension, lowerTension);
+        Quaternionf tilt = new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F,
+                (float) target.x, (float) target.y, (float) target.z);
+        Vector3f axis = new Quaternionf().slerp(tilt, influence).transform(new Vector3f(0.0F, 1.0F, 0.0F));
+        fih$bobberAxis = new Vec3(axis.x, axis.y, axis.z);
+    }
 
     @Redirect(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/FishingHookRenderer;vertex(Lcom/mojang/blaze3d/vertex/VertexConsumer;Lcom/mojang/blaze3d/vertex/PoseStack$Pose;IFIII)V"))
@@ -44,15 +77,21 @@ public abstract class FishingLineRendererMixin {
     @Inject(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("TAIL"))
     private void fih$renderSubmergedHook(FishingHook hook, float yaw, float partialTick, PoseStack pose,
             MultiBufferSource buffers, int light, CallbackInfo ci) {
+        pose.pushPose();
+        pose.mulPose(new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F,
+                (float) fih$bobberAxis.x, (float) fih$bobberAxis.y, (float) fih$bobberAxis.z));
         BobberModelRenderer.renderBobber(pose, buffers, light);
+        pose.popPose();
         Vec3 offset = ((FishingHookAccess) hook).fih$renderHookPosition(partialTick)
                 .subtract(hook.getPosition(partialTick));
         if (offset.lengthSqr() < 0.0001) return;
 
         VertexConsumer line = buffers.getBuffer(RenderType.lines());
         PoseStack.Pose linePose = pose.last();
-        Vec3 direction = offset.add(0.0, fih$HOOK_TOP - fih$BOBBER_BOTTOM, 0.0).normalize();
-        line.addVertex(linePose, 0.0F, fih$BOBBER_BOTTOM, 0.0F).setColor(0xFFC0C0C0)
+        Vec3 start = fih$bobberAxis.scale(fih$BOBBER_BOTTOM);
+        Vec3 end = offset.add(0.0, fih$HOOK_TOP, 0.0);
+        Vec3 direction = end.subtract(start).normalize();
+        line.addVertex(linePose, (float) start.x, (float) start.y, (float) start.z).setColor(0xFFC0C0C0)
                 .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
         line.addVertex(linePose, (float) offset.x, (float) offset.y + fih$HOOK_TOP, (float) offset.z).setColor(0xFFC0C0C0)
                 .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
@@ -71,20 +110,24 @@ public abstract class FishingLineRendererMixin {
         Player owner = hook.getPlayerOwner();
         if (owner != null && !owner.getMainHandItem().is(Items.FISHING_ROD)
                 && !owner.getOffhandItem().is(Items.FISHING_ROD)) return;
-        y += 0.25F - fih$BOBBER_TOP;
+        Vec3 start = fih$bobberAxis.scale(fih$BOBBER_TOP);
+        float dx = x - (float) start.x;
+        float dy = y + 0.25F - (float) start.y;
+        float dz = z - (float) start.z;
         float tension = Math.min(1.0F, ((FishingHookAccess) hook).fih$visualTension(partialTick) * 2.0F);
         float curve = Mth.lerp(tension, (fraction * fraction + fraction) * 0.5F, fraction);
         float nextCurve = Mth.lerp(tension, (nextFraction * nextFraction + nextFraction) * 0.5F, nextFraction);
-        float normalX = x * (nextFraction - fraction);
-        float normalY = y * (nextCurve - curve);
-        float normalZ = z * (nextFraction - fraction);
+        float normalX = dx * (nextFraction - fraction);
+        float normalY = dy * (nextCurve - curve);
+        float normalZ = dz * (nextFraction - fraction);
         float length = Mth.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
         if (length > 1.0E-6F) {
             normalX /= length;
             normalY /= length;
             normalZ /= length;
         }
-        consumer.addVertex(pose, x * fraction, y * curve + fih$BOBBER_TOP, z * fraction)
+        consumer.addVertex(pose, (float) start.x + dx * fraction, (float) start.y + dy * curve,
+                        (float) start.z + dz * fraction)
                 .setColor(0xFFC0C0C0).setNormal(pose, normalX, normalY, normalZ);
     }
 

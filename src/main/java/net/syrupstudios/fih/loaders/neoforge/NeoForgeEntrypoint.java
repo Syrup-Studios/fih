@@ -13,11 +13,21 @@ import net.syrupstudios.fih.FishDefinitionsPayload;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.syrupstudios.fih.ModIdentity;
 import net.syrupstudios.fih.Fih;
+import net.syrupstudios.fih.FihSounds;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.sounds.SoundEvent;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 @Mod(ModIdentity.MOD_ID)
 public final class NeoForgeEntrypoint {
+    private static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, ModIdentity.MOD_ID);
+    static {
+        SOUNDS.register("reel_in", () -> FihSounds.REEL_IN);
+        SOUNDS.register("line_out", () -> FihSounds.LINE_OUT);
+    }
     public NeoForgeEntrypoint(IEventBus modEventBus) {
         Fih.initialize("NeoForge");
+        SOUNDS.register(modEventBus);
         modEventBus.addListener((RegisterPayloadHandlersEvent event) ->
                 event.registrar("1").playToClient(FishDefinitionsPayload.TYPE, FishDefinitionsPayload.CODEC,
                         (payload, context) -> FishDefinitions.setDisplayItems(payload.items())));
