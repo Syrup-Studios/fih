@@ -13,7 +13,8 @@
   "license": "${license}",
   "environment": "${environment}",
   "entrypoints": {
-    "main": ["${modPackage}.loaders.fabric.FabricEntrypoint"]
+    "main": ["${modPackage}.loaders.fabric.FabricEntrypoint"],
+    "client": ["${modPackage}.loaders.fabric.FabricClientEntrypoint"]
   },
   "mixins": ["fih.mixins.json"],
   "depends": {"@dependencies@": ""}

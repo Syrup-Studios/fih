@@ -10,7 +10,7 @@ import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
-import net.syrupstudios.fih.FishMeasurements;
+import net.syrupstudios.fih.FishDefinitions;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -36,7 +36,7 @@ public abstract class AbstractFishMeasurementMixin implements FishMeasurementAcc
             return;
         }
         table.getRandomItems(params, seed, stack -> {
-            if (FishMeasurements.isFishDrop(fish, stack)) FishMeasurements.copyToItem(fish, stack);
+            if (FishDefinitions.isFishDrop(fish, stack)) FishDefinitions.copyToItem(fish, stack);
             output.accept(stack);
         });
     }
@@ -46,15 +46,15 @@ public abstract class AbstractFishMeasurementMixin implements FishMeasurementAcc
         LivingEntity entity = (LivingEntity) (Object) this;
         if (!(entity instanceof AbstractFish fish) || fish.level().isClientSide) return;
         if (fih$lengthCm <= 0 || fih$weightKg <= 0) {
-            var range = FishMeasurements.range(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()));
+            var range = FishDefinitions.range(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()));
             float percentile = fish.getRandom().nextFloat();
             fih$lengthCm = range.minLength() + (range.maxLength() - range.minLength()) * percentile;
             fih$weightKg = range.minWeight() + (range.maxWeight() - range.minWeight()) * percentile;
         }
         var instance = fish.getAttribute(Attributes.SCALE);
         if (instance != null && instance.getModifier(fih$SCALE_MODIFIER) == null) {
-            var range = FishMeasurements.range(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()));
-            double scale = FishMeasurements.scaleForLength(fih$lengthCm, range);
+            var range = FishDefinitions.range(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType()));
+            double scale = FishDefinitions.scaleForLength(fih$lengthCm, range);
             instance.addPermanentModifier(new AttributeModifier(fih$SCALE_MODIFIER, scale - 1.0,
                     AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
         }

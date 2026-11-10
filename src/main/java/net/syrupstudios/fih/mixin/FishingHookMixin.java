@@ -25,7 +25,7 @@ import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.ClipContext;
-import net.syrupstudios.fih.FishMeasurements;
+import net.syrupstudios.fih.FishDefinitions;
 import net.syrupstudios.fih.FihGameRules;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.ai.FishingHookAccess;
@@ -431,8 +431,8 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     }
 
     private static ItemStack fih$catchStack(AbstractFish fish) {
-        ItemStack stack = FishMeasurements.catchItem(fish);
-        FishMeasurements.copyToItem(fish, stack);
+        ItemStack stack = FishDefinitions.catchItem(fish);
+        FishDefinitions.copyToItem(fish, stack);
         return stack;
     }
 }

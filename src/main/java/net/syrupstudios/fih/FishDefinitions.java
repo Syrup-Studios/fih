@@ -16,19 +16,20 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
 
-public final class FishMeasurements {
+public final class FishDefinitions {
     public record Range(float minLength, float maxLength, float minWeight, float maxWeight) {}
 
     private record Definition(Range range, ResourceLocation item, List<ResourceLocation> additionalDrops) {}
     private static final Map<ResourceLocation, Definition> DEFINITIONS = new HashMap<>();
+    private static volatile Map<ResourceLocation, ResourceLocation> displayItems = Map.of();
     private static final Range DEFAULT = new Range(12, 45, 0.15F, 1.8F);
 
     public static void reload(ResourceManager manager) {
         Map<ResourceLocation, Definition> loaded = new HashMap<>();
-        manager.listResources("fih/fish_measurements", id -> id.getPath().endsWith(".json"))
+        manager.listResources("fish", id -> id.getPath().endsWith(".json"))
                 .forEach((file, resource) -> {
                     String path = file.getPath();
-                    String entityPath = path.substring("fih/fish_measurements/".length(), path.length() - 5);
+                    String entityPath = path.substring("fish/".length(), path.length() - 5);
                     int separator = entityPath.indexOf('/');
                     if (separator <= 0 || separator == entityPath.length() - 1) {
                         Fih.LOGGER.warn("Ignoring fish measurement resource with no entity namespace: {}", file);
@@ -65,7 +66,20 @@ public final class FishMeasurements {
             DEFINITIONS.clear();
             DEFINITIONS.putAll(loaded);
         }
+        Map<ResourceLocation, ResourceLocation> items = new HashMap<>();
+        loaded.forEach((entity, definition) -> items.put(definition.item(), entity));
+        displayItems = Map.copyOf(items);
         Fih.LOGGER.info("Loaded {} fish measurement ranges", loaded.size());
+    }
+
+    public static Map<ResourceLocation, ResourceLocation> displayItems() { return displayItems; }
+
+    public static void setDisplayItems(Map<ResourceLocation, ResourceLocation> items) {
+        displayItems = Map.copyOf(items);
+    }
+
+    public static ResourceLocation entityForItem(ItemStack stack) {
+        return displayItems.get(BuiltInRegistries.ITEM.getKey(stack.getItem()));
     }
 
     public static Range range(ResourceLocation entity) {

@@ -19,7 +19,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.syrupstudios.fih.ai.HeldFish;
-import net.syrupstudios.fih.FishMeasurements;
+import net.syrupstudios.fih.FishDefinitions;
 
 public final class HeldFishRenderer {
     private static ClientLevel cachedLevel;
@@ -95,8 +95,8 @@ public final class HeldFishRenderer {
         if (!Float.isFinite(scale) || scale <= 0.0F) {
             float length = data.getFloat("length_cm");
             if (!Float.isFinite(length) || length <= 0.0F) return 1.0F;
-            scale = FishMeasurements.scaleForLength(length,
-                    FishMeasurements.range(BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType())));
+            scale = FishDefinitions.scaleForLength(length,
+                    FishDefinitions.range(BuiltInRegistries.ENTITY_TYPE.getKey(fish.getType())));
         }
         return net.minecraft.util.Mth.clamp(scale, 0.0625F, 16.0F);
     }
