@@ -1,4 +1,7 @@
 {
+  "spawn_conditions": {
+    "biomes": ["minecraft:warm_ocean", "minecraft:lukewarm_ocean", "minecraft:deep_lukewarm_ocean"]
+  },
   "min_length_cm": 15.0,
   "max_length_cm": 50.0,
   "min_weight_kg": 0.2,

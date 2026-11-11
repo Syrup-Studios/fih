@@ -1,4 +1,7 @@
 {
+  "spawn_conditions": {
+    "biomes": ["minecraft:ocean", "minecraft:lukewarm_ocean", "minecraft:deep_ocean", "minecraft:deep_lukewarm_ocean", "minecraft:deep_cold_ocean", "minecraft:cold_ocean"]
+  },
   "additional_drops": ["minecraft:cooked_cod"],
   "min_length_cm": 20.0,
   "max_length_cm": 70.0,

@@ -1,4 +1,7 @@
 {
+  "spawn_conditions": {
+    "biomes": ["minecraft:warm_ocean", "minecraft:lukewarm_ocean", "minecraft:deep_lukewarm_ocean", "minecraft:mangrove_swamp", "minecraft:lush_caves"]
+  },
   "min_length_cm": 5.0,
   "max_length_cm": 25.0,
   "min_weight_kg": 0.02,
