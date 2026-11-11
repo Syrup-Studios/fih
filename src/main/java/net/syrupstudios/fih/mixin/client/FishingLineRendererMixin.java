@@ -77,24 +77,29 @@ public abstract class FishingLineRendererMixin {
     @Inject(method = "render(Lnet/minecraft/world/entity/projectile/FishingHook;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("TAIL"))
     private void fih$renderSubmergedHook(FishingHook hook, float yaw, float partialTick, PoseStack pose,
             MultiBufferSource buffers, int light, CallbackInfo ci) {
-        pose.pushPose();
-        pose.mulPose(new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F,
-                (float) fih$bobberAxis.x, (float) fih$bobberAxis.y, (float) fih$bobberAxis.z));
-        BobberModelRenderer.renderBobber(pose, buffers, light);
-        pose.popPose();
-        Vec3 offset = ((FishingHookAccess) hook).fih$renderHookPosition(partialTick)
+        FishingHookAccess access = (FishingHookAccess) hook;
+        if (access.fih$hasBobber()) {
+            pose.pushPose();
+            pose.mulPose(new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F,
+                    (float) fih$bobberAxis.x, (float) fih$bobberAxis.y, (float) fih$bobberAxis.z));
+            BobberModelRenderer.renderBobber(pose, buffers, light);
+            pose.popPose();
+        }
+        Vec3 offset = access.fih$renderHookPosition(partialTick)
                 .subtract(hook.getPosition(partialTick));
-        if (offset.lengthSqr() < 0.0001) return;
+        if (access.fih$hasBobber() && offset.lengthSqr() < 0.0001) return;
 
-        VertexConsumer line = buffers.getBuffer(RenderType.lines());
-        PoseStack.Pose linePose = pose.last();
-        Vec3 start = fih$bobberAxis.scale(fih$BOBBER_BOTTOM);
-        Vec3 end = offset.add(0.0, fih$HOOK_TOP, 0.0);
-        Vec3 direction = end.subtract(start).normalize();
-        line.addVertex(linePose, (float) start.x, (float) start.y, (float) start.z).setColor(0xFFC0C0C0)
-                .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
-        line.addVertex(linePose, (float) offset.x, (float) offset.y + fih$HOOK_TOP, (float) offset.z).setColor(0xFFC0C0C0)
-                .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
+        if (access.fih$hasBobber()) {
+            VertexConsumer line = buffers.getBuffer(RenderType.lines());
+            PoseStack.Pose linePose = pose.last();
+            Vec3 start = fih$bobberAxis.scale(fih$BOBBER_BOTTOM);
+            Vec3 end = offset.add(0.0, fih$HOOK_TOP, 0.0);
+            Vec3 direction = end.subtract(start).normalize();
+            line.addVertex(linePose, (float) start.x, (float) start.y, (float) start.z).setColor(0xFFC0C0C0)
+                    .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
+            line.addVertex(linePose, (float) end.x, (float) end.y, (float) end.z).setColor(0xFFC0C0C0)
+                    .setNormal(linePose, (float) direction.x, (float) direction.y, (float) direction.z);
+        }
 
         pose.pushPose();
         pose.translate(offset.x, offset.y, offset.z);
@@ -110,7 +115,9 @@ public abstract class FishingLineRendererMixin {
         Player owner = hook.getPlayerOwner();
         if (owner != null && !owner.getMainHandItem().is(Items.FISHING_ROD)
                 && !owner.getOffhandItem().is(Items.FISHING_ROD)) return;
-        Vec3 start = fih$bobberAxis.scale(fih$BOBBER_TOP);
+        FishingHookAccess access = (FishingHookAccess) hook;
+        Vec3 start = access.fih$hasBobber() ? fih$bobberAxis.scale(fih$BOBBER_TOP)
+                : access.fih$renderHookPosition(partialTick).subtract(hook.getPosition(partialTick)).add(0.0, fih$HOOK_TOP, 0.0);
         float dx = x - (float) start.x;
         float dy = y + 0.25F - (float) start.y;
         float dz = z - (float) start.z;

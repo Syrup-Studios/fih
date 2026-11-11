@@ -11,7 +11,7 @@ public final class FihGameRules {
     public static final GameRules.Key<GameRules.IntegerValue> DEBUG = register("fihDebug", 0);
     public static final GameRules.Key<GameRules.IntegerValue> REEL_COOLDOWN = register("fihReelCooldown", 20);
     public static final GameRules.Key<GameRules.IntegerValue> REEL_AMOUNT = register("fihReelAmount", 70);
-    public static final GameRules.Key<GameRules.IntegerValue> HOOK_DEPTH = register("fihHookDepth", 2);
+    public static final GameRules.Key<GameRules.IntegerValue> MAX_HOOK_DEPTH = register("fihMaxHookDepth", 16);
     public static final GameRules.Key<GameRules.IntegerValue> CAST_STRENGTH = register("fihCastStrength", 100);
 
     private FihGameRules() {}

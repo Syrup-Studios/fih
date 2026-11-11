@@ -28,6 +28,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.ClipContext;
 import net.syrupstudios.fih.FishDefinitions;
 import net.syrupstudios.fih.FihGameRules;
+import net.syrupstudios.fih.RodDepth;
 import net.syrupstudios.fih.Fih;
 import net.syrupstudios.fih.ai.FishingHookAccess;
 import net.syrupstudios.fih.ai.FishMeasurementAccess;
@@ -55,6 +56,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     @Unique private double fih$lineLength = -1.0;
     @Unique private double fih$sublineLength = -1.0;
     @Unique private int fih$configuredDepth = -1;
+    @Unique private int fih$selectedDepth = RodDepth.DEFAULT;
     @Unique private boolean fih$lineLocked;
     @Unique private float fih$previousTension;
     @Unique private float fih$currentTension;
@@ -70,13 +72,29 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     @Unique private float fih$previousLineMotion, fih$currentLineMotion;
     @Unique private float fih$reelSpeed;
 
+    @Override public void fih$setHookDepth(int depth) {
+        fih$selectedDepth = depth;
+    }
+
+    @Override public void fih$setHasBobber(boolean hasBobber) {
+        ((FishingHook) (Object) this).getEntityData().set(fih$HAS_BOBBER, hasBobber);
+    }
+
+    @Override public boolean fih$hasBobber() {
+        return ((FishingHook) (Object) this).getEntityData().get(fih$HAS_BOBBER);
+    }
+
     @Unique private static final double fih$MIN_LINE_LENGTH = 2.0;
+    // Keep about 0.1 blocks of line between the bobber's bottom and the hook's top.
+    @Unique private static final double fih$MIN_BOBBER_DEPTH = 1.5 / 16.0 + 2.0 / 16.0 + 0.1;
     @Unique private static final double fih$SOUND_FULL_REEL_RATE = 0.07;
     @Unique private static final float fih$REEL_IMPULSE = 1.0F / 3.0F;
     @Unique private static final float fih$REEL_ACCELERATION = 1.0F / 30.0F;
     @Unique private static final float fih$REEL_DECELERATION = 1.0F / 20.0F;
     @Unique private static final EntityDataAccessor<Integer> fih$TENSION =
             SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.INT);
+    @Unique private static final EntityDataAccessor<Boolean> fih$HAS_BOBBER =
+            SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.BOOLEAN);
     @Unique private static final EntityDataAccessor<Integer> fih$LOWER_TENSION =
             SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.INT);
     @Unique private static final EntityDataAccessor<Float> fih$HOOK_X = SynchedEntityData.defineId(FishingHook.class, EntityDataSerializers.FLOAT);
@@ -87,6 +105,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
     @Inject(method = "defineSynchedData", at = @At("TAIL"))
     private void fih$defineTensionData(SynchedEntityData.Builder builder, CallbackInfo ci) {
         builder.define(fih$TENSION, 0);
+        builder.define(fih$HAS_BOBBER, false);
         builder.define(fih$LOWER_TENSION, 0);
         builder.define(fih$HOOK_X, 0.0F);
         builder.define(fih$HOOK_Y, 0.0F);
@@ -99,13 +118,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         FishingHook hook = (FishingHook) (Object) this;
         fih$bobberBeforeTick = hook.position();
         if (!hook.level().isClientSide) {
-            int depth = Math.clamp(hook.level().getGameRules().getInt(FihGameRules.HOOK_DEPTH), 0, 16);
-            if (fih$configuredDepth < 0) {
-                fih$sublineLength = depth;
-            } else if (depth != fih$configuredDepth) {
-                fih$sublineLength = Math.clamp(fih$sublineLength + depth - fih$configuredDepth, 0.0, depth);
-            }
-            fih$configuredDepth = depth;
+            fih$updateDepth(hook);
             return;
         }
         fih$previousTension = fih$currentTension;
@@ -119,6 +132,19 @@ public abstract class FishingHookMixin implements FishingHookAccess {
         fih$previousHookOffset = fih$currentHookOffset;
         fih$currentHookOffset = new Vec3(hook.getEntityData().get(fih$HOOK_X),
                 hook.getEntityData().get(fih$HOOK_Y), hook.getEntityData().get(fih$HOOK_Z));
+    }
+
+    @Unique private void fih$updateDepth(FishingHook hook) {
+        boolean hasBobber = fih$hasBobber();
+        int depth = hasBobber ? Math.min(fih$selectedDepth, RodDepth.maximum(hook.level().getGameRules())) : 0;
+        double length = hasBobber ? Math.max(fih$MIN_BOBBER_DEPTH, depth) : 0.0;
+        if (fih$configuredDepth < 0) {
+            fih$sublineLength = length;
+        } else if (depth != fih$configuredDepth) {
+            double previous = hasBobber ? Math.max(fih$MIN_BOBBER_DEPTH, fih$configuredDepth) : 0.0;
+            fih$sublineLength = Math.clamp(fih$sublineLength + length - previous, 0.0, length);
+        }
+        fih$configuredDepth = depth;
     }
 
     @Override
@@ -167,6 +193,9 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             target = "Lnet/minecraft/world/entity/projectile/FishingHook;setDeltaMovement(DDD)V"))
     private void fih$allowBobberToLeaveWater(FishingHook hook, double x, double y, double z) {
         Player player = hook.getPlayerOwner();
+        if (!fih$hasBobber()) {
+            y = hook.getDeltaMovement().y;
+        }
         if ((fih$isReeling(player) || fih$reelSpeed > 0.0F) && player != null && fih$lineLocked && fih$lineLength >= 0.0
                 && hook.getDeltaMovement().y > 0.0) {
             Vec3 playerCenter = player.position().add(0.0, player.getBbHeight() * 0.5, 0.0);
@@ -215,6 +244,17 @@ public abstract class FishingHookMixin implements FishingHookAccess {
             if (hook.isRemoved()) return;
             fih$tickSubhook(hook);
             fih$payOutLine(hook);
+            Player owner = hook.getPlayerOwner();
+            if (!fih$hasBobber() && hookedIn == null && fih$hasWaterAtOrBelow(hook)
+                    && !fih$isReeling(owner) && fih$reelSpeed <= 0.0F) {
+                Vec3 velocity = hook.getDeltaMovement();
+                hook.setDeltaMovement(velocity.x, Math.min(velocity.y, -0.04), velocity.z);
+                if (owner != null && fih$lineLength >= 0.0) {
+                    Vec3 playerCenter = owner.position().add(0.0, owner.getBbHeight() * 0.5, 0.0);
+                    double needed = playerCenter.distanceTo(hook.position().add(hook.getDeltaMovement()));
+                    fih$lineLength = Math.min(128.0, Math.max(fih$lineLength, needed));
+                }
+            }
             if (fih$lineMotionTick != hook.level().getGameTime()) hook.getEntityData().set(fih$LINE_MOTION, 0.0F);
             if (fih$lineLength >= 0.0) fih$applyRodLineTension(hook);
         }
@@ -464,10 +504,7 @@ public abstract class FishingHookMixin implements FishingHookAccess {
                     player.position().add(0.0, player.getBbHeight() * 0.5, 0.0).distanceTo(hook.position()));
         }
         fih$lineLocked = true;
-        if (fih$sublineLength < 0.0) {
-            fih$sublineLength = Math.clamp(hook.level().getGameRules().getInt(FihGameRules.HOOK_DEPTH), 0, 16);
-            fih$configuredDepth = (int) fih$sublineLength;
-        }
+        if (fih$sublineLength < 0.0) fih$updateDepth(hook);
         int reelAmount = Math.clamp(hook.level().getGameRules().getInt(FihGameRules.REEL_AMOUNT), 0, 4000);
         double weight = hookedIn instanceof FishMeasurementAccess measurements ? measurements.fih$weightKg() : 0.0;
         double amount = speed * reelAmount / (1000.0 * (1.0 + weight * 0.15));

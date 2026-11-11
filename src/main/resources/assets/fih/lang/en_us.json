@@ -1,4 +1,11 @@
 {
+  "item.fih.tackle_box": "Tackle Box",
+  "item.fih.bone_hook": "Bone Hook",
+  "item.fih.iron_hook": "Iron Hook",
+  "item.fih.bobber": "Bobber",
+  "screen.fih.rod_modifications": "Rod Modifications",
+  "screen.fih.storage": "Storage",
+  "screen.fih.hook_depth": "Hook depth: %s m",
   "item.fih.measurements.length": "Length: %s cm",
   "item.fih.measurements.weight": "Weight: %s kg"
 }

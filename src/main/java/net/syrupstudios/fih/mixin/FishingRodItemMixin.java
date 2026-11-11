@@ -14,11 +14,20 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.core.NonNullList;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
+import net.syrupstudios.fih.FihItems;
+import net.syrupstudios.fih.menu.TackleMenu;
 import net.syrupstudios.fih.FihGameRules;
+import net.syrupstudios.fih.RodDepth;
 import net.syrupstudios.fih.ai.CastingAccess;
 import net.syrupstudios.fih.ai.FishingHookAccess;
 import org.spongepowered.asm.mixin.Mixin;
@@ -35,6 +44,23 @@ public abstract class FishingRodItemMixin extends Item {
     @Inject(method = "use", at = @At("HEAD"), cancellable = true)
     private void fih$startReeling(Level level, Player player, InteractionHand hand,
             CallbackInfoReturnable<InteractionResultHolder<ItemStack>> cir) {
+        if (player.isShiftKeyDown() && player.fishing == null) {
+            int boxSlot = -1;
+            for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                if (player.getInventory().getItem(i).is(FihItems.TACKLE_BOX)) { boxSlot = i; break; }
+            }
+            if (boxSlot >= 0) {
+                if (player instanceof ServerPlayer serverPlayer) {
+                    int boxIndex = boxSlot;
+                    int rodIndex = hand == InteractionHand.MAIN_HAND ? player.getInventory().selected : 40;
+                    serverPlayer.openMenu(new SimpleMenuProvider(
+                            (id, inventory, ignored) -> new TackleMenu(id, inventory, boxIndex, rodIndex),
+                            Component.translatable("item.fih.tackle_box")));
+                }
+                cir.setReturnValue(InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide()));
+                return;
+            }
+        }
         Entity hooked = player.fishing == null ? null : player.fishing.getHookedIn();
         if (hooked != null && !(hooked instanceof AbstractFish)) return;
         ((CastingAccess) player).fih$setCasting(player.fishing == null);
@@ -63,6 +89,10 @@ public abstract class FishingRodItemMixin extends Item {
         int lure = (int) (EnchantmentHelper.getFishingTimeReduction(serverLevel, stack, player) * 20.0F);
         int luck = EnchantmentHelper.getFishingLuckBonus(serverLevel, stack, player);
         FishingHook hook = new FishingHook(player, level, luck, lure);
+        ((FishingHookAccess) hook).fih$setHookDepth(RodDepth.get(stack));
+        NonNullList<ItemStack> tackle = NonNullList.withSize(3, ItemStack.EMPTY);
+        stack.getOrDefault(DataComponents.CONTAINER, ItemContainerContents.EMPTY).copyInto(tackle);
+        ((FishingHookAccess) hook).fih$setHasBobber(!tackle.get(0).isEmpty());
         hook.setDeltaMovement(hook.getDeltaMovement().scale(charge * strength));
         level.addFreshEntity(hook);
         level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FISHING_BOBBER_THROW,

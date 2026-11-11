@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:bone"
+    }
+  ],
+  "result": {
+    "id": "fih:bone_hook",
+    "count": 1
+  }
+}

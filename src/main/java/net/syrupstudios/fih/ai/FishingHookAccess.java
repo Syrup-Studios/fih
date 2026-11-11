@@ -10,6 +10,9 @@ public interface FishingHookAccess {
     void fih$release(AbstractFish fish);
     void fih$completeApproach(AbstractFish fish);
     void fih$startReel();
+    void fih$setHookDepth(int depth);
+    void fih$setHasBobber(boolean hasBobber);
+    boolean fih$hasBobber();
     void fih$reelIn();
     float fih$visualTension(float partialTick);
     float fih$visualLowerTension(float partialTick);

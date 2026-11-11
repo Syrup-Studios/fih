@@ -3,6 +3,6 @@
   "package": "${modPackage}.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": ["FishingHookMixin", "FishingHookTrackingMixin", "FishingRodItemMixin", "PlayerCastingMixin", "HeldFishItemMixin", "AbstractFishMixin", "AbstractFishMeasurementMixin", "BucketableMixin", "ItemMeasurementTooltipMixin", "FishDefinitionsSyncMixin", "MobGoalSelectorAccess", "SchoolingFishMixin", "RandomStrollGoalMixin", "GameRulesAccess", "IntegerGameRuleAccess"],
-  "client": ["client.FishSwimPitchMixin", "client.FishRendererPitchMixin", "client.GameRendererFovAccess", "client.ItemInHandRendererAccess", "client.ItemInHandRodMotionMixin", "client.FishingLineRendererMixin", "client.FishingHookVisibilityMixin", "client.HeldFishInputMixin", "client.HeldFishRenderMixin", "client.HeldFishWaterMixin", "client.HeldFishPlayerModelMixin", "client.FishItemFrameRendererMixin", "client.ReelSoundRendererMixin"],
+  "client": ["client.FishSwimPitchMixin", "client.FishRendererPitchMixin", "client.GameRendererFovAccess", "client.ItemInHandRendererAccess", "client.ItemInHandRodMotionMixin", "client.FishingLineRendererMixin", "client.FishingHookVisibilityMixin", "client.HeldFishInputMixin", "client.HeldFishRenderMixin", "client.HeldFishWaterMixin", "client.HeldFishPlayerModelMixin", "client.FishItemFrameRendererMixin", "client.ReelSoundRendererMixin", "client.MenuScreensAccess"],
   "injectors": { "defaultRequire": 1 }
 }
